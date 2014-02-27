@@ -2329,15 +2329,15 @@ NIL
 (setf *print-readably* nil ; allegro 5.0 notably will bork without this
       *print-level* nil
       *load-verbose* nil *compile-verbose* nil *compile-print* nil *load-print* nil)
-
-(unless (member :asdf *features*)
-  (ignore-errors (funcall 'require "asdf")))
-(unless (member :asdf *features*)
-  (ignore-errors (load (merge-pathnames "cl/asdf/build/asdf.lisp" (user-homedir-pathname)))))
-(unless (member :asdf *features*)
-  (ignore-errors (load "/usr/share/common-lisp/source/asdf/build/asdf.lisp")))
-(unless (member :asdf *features*)
-  (error "Could not load ASDF."))
+(handler-bind ((warning #'muffle-warning))
+  (unless (member :asdf *features*)
+    (ignore-errors (funcall 'require "asdf")))
+  (unless (member :asdf *features*)
+    (ignore-errors (load (merge-pathnames "cl/asdf/build/asdf.lisp" (user-homedir-pathname)))))
+  (unless (member :asdf *features*)
+    (ignore-errors (load "/usr/share/common-lisp/source/asdf/build/asdf.lisp")))
+  (unless (member :asdf *features*)
+    (error "Could not load ASDF.")))
 
 (in-package :asdf))
 NIL
@@ -2349,7 +2349,8 @@ NIL
   (flet ((maybe-register (d)
            (when (probe-file (merge-pathnames "asdf.asd" d))
              (pushnew d *central-registry*))))
-    (or (find-system "asdf" nil)
+    (or (let ((asdf (find-system "asdf" nil)))
+          (and asdf (version-satisfies asdf "3.0.1")))
         (maybe-register (merge-pathnames "cl/asdf/" (user-homedir-pathname)))
         (maybe-register "/usr/share/common-lisp/source/asdf/"))))
 
@@ -2357,17 +2358,22 @@ NIL
 (defparameter asdf::*asdf-verbose* nil) ; for old versions of ASDF 2
 (setf *load-verbose* nil asdf::*verbose-out* nil)
 (handler-bind ((warning #'muffle-warning))
-  (operate 'load-op :asdf :verbose nil))
-
+  (let (#+(and abcl asdf3) ; Why does the above not suffice?
+        (uiop::*uninteresting-conditions* (cons 'warning uiop::*uninteresting-conditions*)))
+    (operate 'load-op :asdf :verbose nil))))
+NIL
+":" 't #-cl-launch ;'; cl_fragment<<'NIL' # Because of ASDF punting, this ASDF package may be a new one.
 (unless (asdf::version-satisfies (asdf::asdf-version) "3.0.1")
   (error "cl-launch requires ASDF 3.0.1 or later"))
+NIL
+":" 't #-cl-launch ;'; cl_fragment<<'NIL'
+;;;; Create cl-launch with UIOP.
+(progn
+  (uiop:define-package :cl-launch
+    (:use :common-lisp :uiop :asdf)
+    (:export #:compile-and-load-file))
 
-;;;; Ensure package hygiene
-(uiop:define-package :cl-launch
-  (:use :common-lisp :uiop :asdf)
-  (:export #:compile-and-load-file))
-
-(in-package :cl-launch))
+  (in-package :cl-launch))
 NIL
 ":" 't #-cl-launch ;'; cl_fragment<<'NIL'
 ;;;; cl-launch initialization code

@@ -1,3 +1,13 @@
+cl-launch (4.0.0-1) unstable; urgency=low
+
+  * Build with --eval --require --file --system in order of appearance.
+    No more limitation to one optional file, one optional system.
+    Note that --eval is before dump, --init is after dump.
+  * Unix interpreter style invocation: /usr/bin/cl script arguments...
+  * Require ASDF3 and its UIOP. No more headbanging with ASDF2.
+
+ -- Francois-Rene Rideau <fare@tunes.org>  Mon, 27 Feb 2014 16:49:30 -0500
+
 cl-launch (3.22.1-1) unstable; urgency=low
 
   * Tweak to hush ASDF upgrade. Minor edit of documentation.
