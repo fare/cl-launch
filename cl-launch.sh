@@ -1564,7 +1564,7 @@ t_init () {
 }
 t_noinit () {
   t_args "--restart ..."
-  t_next "$@" --restart tt
+  t_next "$@" --restart cl-user::tt
 }
 t_image () {
  t_args "--image ..."
