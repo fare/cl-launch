@@ -936,31 +936,6 @@ process_options () {
 	OUTPUT_FILE="$1" ; shift ;;
       -x|--execute)
         OUTPUT_FILE="!" ;;
-      --)
-        if [ "x${OUTPUT_FILE}" = "x!" ] ; then
-          do_it "$@"
-	else
-	  ABORT "Extra arguments given but not in --execute mode"
-        fi
-	;;
-      -X) OPTION -x
-        #OPTION -iw "uiop:*command-line-arguments*"
-        OPTION -i "(cl-launch::compile-and-load-file (pop uiop:*command-line-arguments*))"
-        #OPTION -i "$(load_form_0 "(pop uiop:*command-line-arguments*)")"
-        ;;
-      -X' '*)
-        # DBG "Working around sh script script limitation..."
-	# The below gets the script arguments from the kernel-given argument:
-	#	OPTS="$x" ; eval "OPTION $OPTS \"\$@\""
-	# The kernel lumps everything after the interpreter name in the #! line
-	# into one (optional) argument. The line is limited to 127 characters,
-	# as defined in linux/{fs/binfmt_script.c,include/linux/binfmts.h}.
-	# If we want to allow for a longer in-script command line argument,
-	# and we do if we want to accomodate for inline Lisp code using -i
-	# then we'd need to go fetch the full line and parse it. Here it is:
-	OPTS="$(get_hashbang_arguments "$1")"
-	eval "OPTION $OPTS \"\$@\""
-	ABORT "The cl-launch script $1 failed to use -X ... --" ;;
       -u|--update)
 	UPDATE="$1" ; shift ;;
       -m|--image)
@@ -971,12 +946,42 @@ process_options () {
 	RESTART="$1" ; shift ;;
       -B|--backdoor)
 	"$@" ; exit ;;
-      -*=*)
-	 DBG "Invalid command line argument '$x'" ; mini_help_abort ;;
-      *=*) # explicit variable definition
-	eval "$(kwote "$x")" ;;
-      *)
-	DBG "Unrecognized command line argument '$x'" ; mini_help_abort ;;
+      --)
+        if [ "x${OUTPUT_FILE}" = "x!" ] ; then
+          do_it "$@"
+	else
+	  ABORT "Extra arguments given but not in --execute mode"
+        fi
+	;;
+      -X) OPTION -x
+        OPTION -i "(cl-launch::compile-and-load-file (pop uiop:*command-line-arguments*))"
+        ;;
+      -X' '*)
+        # DBG "Working around sh script script limitation..."
+	# The below gets the script arguments from the kernel-given argument:
+	#	OPTS="$x" ; eval "OPTION $OPTS \"\$@\""
+	# Unix kernels traditionally lump everything after the interpreter name
+        # from the #! line up to 127 characters into one (optional) argument,
+	# as defined in linux/{fs/binfmt_script.c,include/linux/binfmts.h}.
+	# If we want to allow for a longer in-script command line argument,
+	# and we do if we want to accommodate for inline Lisp code using -i
+	# then we'd need to go fetch the full line and parse it. Here it is:
+	OPTS="$(get_hashbang_arguments "$1")"
+	eval "OPTION $OPTS \"\$@\""
+	ABORT "The cl-launch script $1 failed to use -X ... --"
+        ;;
+       -*)
+        # Directly handle arguments in a #! script
+	if [ -f "$1" ] ; then
+          OPTS="$(get_hashbang_arguments "$1")"
+	  OPTx="$(stringbefore "${#x}" "$OPTS")"
+	  if [ "x$x" = "x$OPTx" ] ; then
+            eval "OPTION $OPTS \"\$@\""
+          fi
+        fi
+        DBG "Invalid command line argument '$x'" ; mini_help_abort ;;
+       *)
+        OPTION --load "$x" --execute -- "$@" ;;
     esac
   done
 }
@@ -992,8 +997,16 @@ add_final_form () {
         SOFTWARE_FINAL_FORMS="$SOFTWARE_FINAL_FORMS${SOFTWARE_FINAL_FORMS+
 }$1"
 }
+if [ -n "$BASH_VERSION$ZSH_VERSION" ] ; then
+  stringbefore () { ECHOn "${2:0:$1}" ;}
+  stringafter () { ECHOn "${2:$1}" ;}
+else
+  stringbefore () { ECHOn "$2" | cut -c-"$1" ;}
+  stringafter () { ECHOn "$2" | cut -c"$1"- ;}
+fi
 get_hashbang_arguments () {
-  cut -c3- < "$1" | { read INTERP ARGUMENTS ; ECHO "$ARGUMENTS" ;}
+ stringafter 2 "$(read LINE < "$1" ; ECHOn "$LINE")" |
+ { read INTERP ARGUMENTS ; ECHOn "$ARGUMENTS" ;}
 }
 mini_help_abort () {
   DBG "$HELP_HEADER
