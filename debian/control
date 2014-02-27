@@ -3,9 +3,9 @@ Section: lisp
 Priority: optional
 Homepage: http://www.cliki.net/cl-launch
 Maintainer: Francois-Rene Rideau <fare@tunes.org>
-Uploaders: Christoph Egger <christoph@debian.org>, Kan-Ru Chen <koster@debian.org>, Milan Zamazal <pdm@debian.org>, Peter Van Eynde <pvaneynd@debian.org>, Julien Danjou <acid@debian.org>, Francois-Rene Rideau <fare@tunes.org>
+Uploaders: Christoph Egger <christoph@debian.org>, Kan-Ru Chen <koster@debian.org>, Milan Zamazal <pdm@debian.org>, Peter Van Eynde <pvaneynd@debian.org>, Julien Danjou <acid@debian.org>
 Build-Depends: debhelper (>= 7.2.8)
-Standards-Version: 3.9.4
+Standards-Version: 3.9.3
 Vcs-Git: git://common-lisp.net/projects/xcvb/cl-launch.git
 
 Package: cl-launch

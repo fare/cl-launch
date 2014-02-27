@@ -60,7 +60,7 @@ mrproper: clean
 
 debian-package: mrproper
 	git clean -xfd
-	RELEASE="$$(git tag -l '3.[0-9][0-9]' | tail -n 1)" ; \
+	RELEASE="$$(git tag -l '[4-.9].[0-9].[0-9]' | tail -n 1)" ; \
 	git-buildpackage --git-debian-branch=master --git-upstream-branch=master --git-upstream-tag=$$RELEASE --git-tag --git-retag --git-ignore-branch
 	lintian -c --fail-on-warnings ../cl-launch_*.changes
 	git clean -xfd
@@ -94,7 +94,7 @@ push:
 debian-package-all: debian-package
 	./cl-launch.sh --include . -B install_path
 	./cl-launch.sh --no-include -o cl-launch -B install_bin
-	VER=$$(git describe --tags --match '?.???') ; \
+	VER=$$(git describe --tags --match '4.*') ; \
 	cd .. && \
 	  tar zcf ~/files/cl-launch/cl-launch-$${VER}.tar.gz --exclude .git cl-launch && \
 	  cp cl-launch/cl-launch.sh ~/files/cl-launch/cl-launch.sh && \
