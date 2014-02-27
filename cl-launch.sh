@@ -7,11 +7,11 @@ AUTHOR_NOTE="\
 # fare at tunes dot org < http://www.cliki.net/Fare%20Rideau >.
 "
 SHORT_LICENSE="\
-# CL-Launch is available under the terms of the bugroff license.
+# cl-launch is available under the terms of the bugroff license.
 #	http://www.geocities.com/SoHo/Cafe/5947/bugroff.html
 # You may at your leisure use the LLGPL instead < http://www.cliki.net/LLGPL >
 "
-WEB_SITE="# For the latest version of CL-Launch, see its web page at:
+WEB_SITE="# For the latest version of cl-launch, see its web page at:
 #	http://www.cliki.net/cl-launch
 "
 LICENSE_COMMENT="\
@@ -93,13 +93,13 @@ cat <<EOF
 Usage:
 	$PROGBASE '(lisp (form) to evaluate)'
 	    evaluate specified Lisp form, print the results followed by newline
-	$PROGBASE [...] script-file arguments...
+	$PROGBASE [options] script-file arguments...
 	    load specified Lisp script, passing arguments
-	$PROGBASE --execute [...] [-- arguments...]
+	$PROGBASE [options] --execute [options] [-- arguments...]
 	    run the specified software without generating a script (default)
-	$PROGBASE --output SCRIPT [--file LISP_FILE] [--init LISP_FORM] [...]
+	$PROGBASE [options] --output SCRIPT [options]
 	    generate a runnable shell script FILE from a software specification
-	$PROGBASE --update FILE [...]
+	$PROGBASE [options] --update FILE [options]
 	    same as above, but reuse software specification from previous FILE
 	$PROGBASE [ --version | --help | --more-help ]
 	    display information (might be long, you may pipe it into a pager)
@@ -126,6 +126,7 @@ Software specification:
  -i FORM	--init FORM	     evaluate FORM after restart
  -ip FORM	--print FORM	     evaluate and princ FORM after restart
  -iw FORM	--write FORM	     evaluate and write FORM after restart
+ -F FORM	--final FORM	     evaluate FORM before dumping IMAGE
  -I PATH        --include PATH       runtime PATH to cl-launch installation
  +I             --no-include         disable cl-launch installation feature
  -R             --rc                 try read /etc/cl-launchrc, ~/.cl-launchrc
@@ -159,104 +160,104 @@ print_more_help () {
 cat<<EOF
 INVOCATION OF CL-LAUNCH
 
-cl-launch will create a shell script that, when invoked, will evaluate
-the specified code with an appropriate Common Lisp implementation.
-cl-launch tries to follow the invocation conventions of both Unix script
-interpreters and Common Lisp implementations.
+cl-launch will evaluate Common Lisp code or create shell scripts or executable
+binaries that evaluate Common Lisp code. cl-launch follows the invocation
+conventions of both Unix script interpreters and Common Lisp implementations.
 
 A suggested short-hand name for cl-launch is cl (you may create a symlink
 if it isn't included in your operating system's cl-launch package).
+We'd like to homestead the path /usr/bin/cl while we can.
 
 To work properly, cl-launch 4.0 depends on ASDF 3.0 or later, and on
 its portability layer UIOP to manage compilation and image life cycle.
 
-The software is specified as the execution, in this order, of:
-* optionally having your Lisp start from a Lisp IMAGE (option --image)
+The software is specified as the evaluation of code in several phases;
+the distinction matters most for creating executable binaries,
+but understanding the evaluation model can avoid surprises in other cases too.
+
+In the first phase, the Lisp image is initialized:
+* optionally having your Lisp start from a Lisp IMAGE (option -I --image)
 * loading a small header of code that provides common cl-launch functionality
-* optionally loading the contents of a FILE (option --file)
-* optionally having ASDF load a SYSTEM (option --system)
-* optionally having your Lisp DUMP an image to restart from (option --dump)
-* optionally having your Lisp execute a RESTART function (option --restart)
-* optionally evaluating a series of initialization FORMS (option --init)
+* loading ASDF3. The cl-launch header will try to load ASDF 3.0.1 or later.
+  If your implementation does not provide it via (require "asdf"),
+  you can configure your implementation's ASDF (if any) to find it.
+  Or you can put it in your home, under ~/cl/asdf/ and cl-launch will find it.
+  Or it may be installed in /usr/share/common-lisp/source/cl-asdf/
+  in which case cl-launch will also find it.
+  Failing any of the above, cl-launch will be unable to proceed.
+* optionally loading quicklisp
+
+In a second phase, your software is built, based on the following options,
+in order of appearance:
+* evaluating one or several FORMS (option -e --eval)
+* compiling a FILE and load the fasl (option -f --file --load)
+  If a filename specified with -f --file --load is '-' (without the quotes),
+  then the standard input is used. You may thus concatenate several files
+  and feed them to cl-launch through a pipe.
+  Or you may write Lisp code that loads the files you need in order.
+  To use a file named '-', pass the argument './-'.
+* requiring an implementation-provided MODULE (option --require)
+* having ASDF3 compile and load a SYSTEM (option -s --system --load-system)
+* optionally having your Lisp DUMP an image to restart from (option -d --dump),
+  and just before evaluating one or several FINAL forms (option -F --final).
+  See section DUMPING IMAGES.
+
+If you are creating a shell script with option -o --output but without using
+option -d --dump, then these first two phases only happen when the script is
+invoked. If you are using option -d --dump, then these two phases happen
+immediately, and no compilation happen when invoking the output.
+Note that compiled files are cached, so that the compilation only happens
+the first time a file is loaded via --load of --system, or if the source file
+has been modified. This may cause slower startup the first time over.
+The cache is controlled by ASDF's output-translations mechanism.
+See your ASDF manual regarding the configuration of this cache,
+which is typically under ~/.cache/common-lisp/
+
+In a third phase, your software is run. This happens immediately if using
+option -x --execute or calling cl-launch as a Unix interpreter on a script;
+or it can happen later if you use option -o --output in combination with
+or without option -d --dump to dump an image (which gives you faster startup
+and single-file or double-file delivery, at the expense of disk space),
+at which point it happens when you invoke the executable output file.
+* Hooks from ASDF3's UIOP/IMAGE are run.
+* an optional FUNCTION provided option -r --restart is invoked.
+  Only one restart function may be specified with option --restart.
+  If you want several functions to be called,
+  you may DEFUN one that calls them and use it as a restart,
+  or you may use multiple init forms below.
+* a series of FORMS specified via options -i --init, -ip --print, -iw --write,
+ and --entry are evaluated, in order of appearance. Arguments that start with
+ an open parenthesis are assumed to be FORMS that follow an implicit --print.
+ These FORMS are read and evaluated sequentially as top-level forms, as loaded
+ from a string stream after the rest of the software has been loaded.
+ Loading from a stream means you don't have to worry about packages and other
+ nasty read-time issues; however it also means that if you care a lot about
+ the very last drop of startup delay when invoking a dumped image,
+ you'll be using option --restart only and avoiding --init.
+ Option --print (or -ip) specifies FORMS where the result of the last form
+ is to be printed as if by PRINC, followed by a newline.
+ Option --write (or -iw) is similar to --print, using WRITE instead of PRINC.
+ Option --entry specifies a function to be funcalled with
+ uiop:*command-line-arguments* as its single argument.
 
 General note on cl-launch invocation: options are processed from left to right;
 usually, repeated options accumulate their effects, with the earlier instances
 taking effect before later instances. In case of conflicting or redundant
 options, the latter override the former.
 
-
-cl-launch defines a package :cl-launch that exports the following symbols:
+cl-launch defines a package :cl-launch that exports the following symbol:
    compile-and-load-file
-Runtime functionality previously provided by cl-launch is now provided by UIOP.
+Runtime functionality formerly provided by cl-launch is now provided by UIOP,
+the portability layer provided by ASDF3.
 See below section 'CL-LAUNCH RUNTIME API'.
 
-The cl-launch header will try to load ASDF from various sources until
-a satisfactorily recent enough version is found. It will first look for
-an ASDF that is already loaded. Then, it will try a path provided through
-environment variable \$ASDF_PATH if specified. Then, it will try to
-(require ...) it from your Lisp implementation, and if an ASDF is present
-but not recent enough, it will try to load a more recent version
-with ASDF itself. Failing the above, it will look in various places
-according to the XDG standard, which by default will include
-   /usr/share/common-lisp/source/asdf/asdf.lisp
-and
-   /usr/share/common-lisp/source/cl-asdf/asdf.lisp
-and finally it will look in your
-home directory under ~/cl/asdf/asdf.lisp.
-If ASDF3 is not found, cl-launch will be unable to proceed.
-
-Only one input files may be specified with option --file. Now, if the specified
-filename is '-' (without the quotes), then the standard input is used. You may
-thus concatenate several files and feed them to cl-launch through a pipe. Or
-you may write Lisp code that loads the files you need in order.
-
-Only one system may be specified with option --system, because the right thing
-to do if your software depends upon multiple systems is to write a system
-definition that :depends-on several other systems. It may still be useful to
-combine options --file and --system, since you may want to prepare your Lisp
-system with proper settings and proclamations before you load your system.
-
-You may specify that a snapshot image of the Lisp world be dumped at this point
-with option --dump. Execution of the program will consist in restarting the Lisp
-implementation from that dumped image. See section DUMPING IMAGES.
-
-You may optionally specify a restart function with option --restart,
-to be called every time the software is invoked. If you are dumping an image,
-this function will be called right after execution resumes from the dumped
-image. If you are not dumping an image, it will merely be executed after
-loading the system from source or fasl. Only one restart function may be
-specified with option --restart. If you want several functions to be called,
-you may DEFUN one that calls them and use it as a restart, or you may use
-init forms below.
-
-Several instances of option --init FORMS may specify as many series of forms
-that will be read and evaluated sequentially as top-level forms, as loaded
-from a string stream after the rest of the software has been loaded.
-Loading from a stream means you don't have to worry about packages and other
-nasty read-time issues; however it also means that if you care a lot about
-the very last drop of startup delay when invoking a dumped image,
-you'll be using option --restart only and avoiding --init.
-Option --print (or -ip) specifies FORMS where the result of the last form
-is to be printed as if by PRINC, followed by a newline. Option --write
-(or -iw) is similar to --print, using WRITE instead of PRINC.
-
-
-When the various side effects from software invocation happen depend on how
-cl-launch is invoked. For the purpose of side effects, software invocation
-may be divided in two phases: software preparation and software execution.
-Software preparation consists in compiling and loading the software as
-specified by options --file and --system. During software preparation, object
-files are cached and will be loaded without being recompiled if a previous
-version exists that does not depend upon any modified sources. If no image is
-dumped, then software preparation happens at each invocation of the generated
-script. If an image is dumped then the preparation only happens at invocation
-of cl-launch, and the generated script will use the prepared software directly;
-with ECL, the load-time (but not compile-time) side-effects of software
-preparation are evaluated every time a dumped image is invoked.
-Software execution happens at every invocation, after the prepared software
-has been suitably loaded. First the --restart function, if provided, is called.
-Then, the --init forms, if provided, are evaluated.
-
+When the first non-recognized option is a filename, cl-launch will try to
+load this filename as a script, as if by --load, then execute it immediately
+as if by --execute --, with the rest of the command line passed as arguments.
+The file name may not start with a '-' or a '(' (without quotes).
+To use a file with one of these (or something unknown) as a first character,
+prepend './' to the filename. Note that it is a security risk to let
+adversaries control the names of files passed to cl-launch or other commands.
 
 When option --execute is specified, the specified software is executed.
 Command-line arguments may be given to software being executed by putting
@@ -277,17 +278,17 @@ If only one argument exists and it doesn't start with '-' then the argument is
 considered as if given to option -ip, to be evaluated and printed immediately.
 
 
-The ASDF 2 source-registry configuration can be overridden with option
+The ASDF3 source-registry configuration can be overridden with option
 --source-registry SOURCE_REGISTRY. The provided configuration will take
 priority over anything provided by the environment or configuration files,
-though it may inherit from them as usual. See the ASDF 2 manual about that.
+though it may inherit from them as usual. See the ASDF3 manual about that.
 
 
-Options --lisp and --wrap may be used to control the way that a Common Lisp
-implementation is found when the software is run. Option --lisp specifies the
-list of Common Lisp implementations to try to use; the list is
-whitespace-separated, and consists in nicknames recognized by cl-launch.
-Option --wrap supplies arbitrary code to be evaluated by the shell wrapper,
+Options -l --lisp and -w --wrap may be used to control the way that
+a Common Lisp implementation is found when the software is run.
+Option -l --lisp specifies the list of implementations to try to use; the list
+is whitespace-separated, and consists in nicknames recognized by cl-launch.
+Option -w --wrap supplies arbitrary code to be evaluated by the shell wrapper,
 after it has read its configuration and defined its internal functions, but
 before it tries to find and run a Lisp implementation. Such wrapper code is
 typically used to modify the variables that control the run-time behaviour
@@ -301,11 +302,11 @@ See below the documentation section on 'LISP IMPLEMENTATION INVOCATION'.
 
 Option --no-include specifies that cl-launch should generate a standalone
 script that includes the configuration, shell wrapper, Lisp header, and
-user-provided Lisp code (from --file). If the software doesn't use asdf, or
-if the asdf systems remain well located at runtime, then the script is pretty
-much standalone indeed an may be moved around the filesystem and still used.
+user-provided Lisp code (from --file). If you can rely on the presence of
+a recent Lisp implementation that provides ASDF, then the script is pretty
+much standalone indeed and may be moved around the filesystem and still used.
 However the size of the output will be the size of the user Lisp code
-plus about 43KiB.
+plus about 28KiB.
 
 Option --include PATH specifies that cl-launch should generate a very small
 script (typically under 1KiB) that when run will read the cl-launch shell
@@ -345,10 +346,10 @@ command -B install_path if you only want to create support files.
 Note that the --backdoor option -B must come last in your invocation.
 
 
-Option --no-rc or +R specifies that cl-launch should not try to read resource
+Option +R --no-rc specifies that cl-launch should not try to read resource
 files /etc/cl-launchrc and ~/.cl-launchrc.
 
-Option --rc or -R specifies that cl-launch should try to read resource
+Option -R --rc specifies that cl-launch should try to read resource
 files /etc/cl-launchrc and ~/.cl-launchrc. These files are notably useful
 to define override the value of \$LISP depending on \$SOFTWARE_SYSTEM.
 A function system_preferred_lisps is provided so that your cl-launchrc might
@@ -361,6 +362,19 @@ will thus preempt user-specified options. A warning will be printed on the
 standard error output when such an override happens.
 Note that such overrides only happen at script-creation time. A script created
 by cl-launch will not try to read the cl-launch resource files.
+
+
+Option +Q --no-quicklisp specifies that cl-launch should not use quicklisp.
+Option -Q --quicklisp specifies that cl-launch should use quicklisp.
+Which is the default depends on your installation. The default default is +Q.
+Quicklisp is loaded from ~/.quicklisp/setup.lisp if available, or else
+~/quicklisp/setup.lisp.
+
+Option -b --clbuild specifies that cl-launch should rely on clbuild to
+find and invoke the Common Lisp implementation.
+Option +b --no-clbuild specifies that cl-launch should not rely on clbuild
+to find and invoke the Common Lisp implementation.
+Which is the default depends on your installation. The default default is +b.
 
 
 Files generated by cl-launch are made of several well-identifiable sections.
@@ -384,20 +398,6 @@ This feature might not work with scripts generated by very early versions
 of the cl-launch utility. It should work with versions later than 1.47.
 
 
-COMPILATION AND FASL CACHING
-
-A cl-launch generated program will compile the contents of the file supplied
-with --file the first time it is invoked. Note that this happens even when
-the file contents were embedded in the script, since compiling or loading
-the wrapped file is equivalent to compiling or loading the original file
-supplied.
-
-So as to avoid problems with badly interfering fasl files everywhere,
-ASDF is usually configured to set up a fasl cache
-to hold fasl files in a proper place, by default under ~/.cache/common-lisp/
-See your ASDF documentation about ASDF-Output-Translations.
-
-
 SUPPORTED LISP IMPLEMENTATIONS
 
 The implementations supported by current version of cl-launch are
@@ -407,31 +407,27 @@ Also defined are aliases
 which are name variations for ccl, gcl, cmucl and ccl again respectively.
 
 Fully supported, including standalone executables:
-  sbcl:  SBCL 1.0.34
+  sbcl:  SBCL 1.1.14
   clisp:  GNU CLISP 2.49
-  ecl:  ECL 11.1.1
-  cmucl:  CMUCL 20B
-  ccl:  ClozureCL 1.6
-  lispworks:  LispWorks Professional 6.0.0  (no personal ed, banner)
+  ecl:  ECL 13.5.1
+  cmucl:  CMUCL 20D
+  ccl:  ClozureCL 1.10
+  lispworks:  LispWorks Professional 6.1.0  (no personal ed, banner)
 
 Fully supported, but no standalone executables:
-  gclcvs (GCL 2.7):  GCL 2.7.0 ansi mode  (get a recent release)
-  allegro:  Allegro 8.2  (also used to work with 5)
+  gcl (GCL 2.7):  GCL 2.7.0 ansi mode  (get a recent release)
+  allegro:  Allegro 9.0  (also used to work with 5)
   scl:  Scieneer CL 1.3.9
 
 Incomplete support:
-  abcl:  ABCL 0.27.0 (no image dumping support at this time)
-  gcl (GCL 2.6):  GCL 2.6.7 ansi mode  (no ASDF so --system not supported)
+  abcl:  ABCL 1.2.1 (no image dumping support at this time)
   xcl:  XCL 0.0.0.291 (cannot dump an image) (get a recent checkout)
 
 
 GCL is only supported in ANSI mode. cl-launch does export GCL_ANSI=t in the
 hope that the gcl wrapper script does the right thing as it does in Debian.
-Also ASDF requires GCL 2.7 so --system won't work with an old gcl 2.6.
-Note that GCL seems to not be maintained anymore.
-A bug in the (years old) latest Debian package prevents ASDF from running,
-and though it is fixed upstream, the upstream GCL itself
-fails to compile unmodified on Debian. RIP.
+Also ASDF requires a very recent GCL 2.7 for ASDF3 support.
+Note that GCL seems to not be very actively maintained anymore.
 
 There are some issues regarding standalone executables on CLISP.
 See below in the section regarding STANDALONE EXECUTABLES.
@@ -455,6 +451,12 @@ Similarly, a mlisp image for allegro can be created as follows:
 
 Additionally, cl-launch supports the use of clbuild as a wrapper to invoke
 the Lisp implementation, with the --clbuild option.
+
+
+SUPPORTED SHELLS
+
+cl-launch was tested with all of posh 0.4.7, bash 2.05, bash 3.1, zsh 4.3.2,
+dash 0.5.3 and busybox 1.01 ash.
 
 
 LISP IMPLEMENTATION INVOCATION
@@ -548,29 +550,28 @@ clbuild support is not fully tested at this point. Please report any bug.
 
 SIMPLE CL-LAUNCH SCRIPTS
 
-In simple cases, you may create a Common Lisp shell script with CL-Launch
+In simple cases, you may create a Common Lisp shell script with cl-launch
 without a script generation step, just because you'll spend a lot of time
 editing the script and distributing it, and little time waiting for script
 startup time anyway. This notably is a good idea if you're not spawning many
 instances of the same version of a script on a given computer. If that's
 what you want, you may use cl-launch as a script interpret the following way
 (stripping leading spaces):
-  #!/path/to/cl-launch -X ...options... --
+  #!/path/to/cl-launch ...options...
 For instance, you may write the following script (stripping leading spaces):
-  #!/usr/bin/cl-launch -X --init '(format t "foo~%")' --
-  (format t "hello, world~%")
-  (write uiop:*command-line-arguments*) (terpri)
-The limitation is that the first argument MUST be '-X' (upper case matters,
-and so does the following space actually), the last one MUST be '--' and all
-your other arguments (if any) must fit on the first line, although said line
-can be as long as you want: the kernel has a limit of 127 characters or so
-for this first line, but cl-launch will read the first line directly from
-the Lisp script, anyway.
+  #!/usr/bin/cl --restart cl-user::main
+  (defun main ()
+    (uiop:println "Hello, World!")
+    (uiop:writeln uiop:*command-line-arguments*))
+The options must be quoted as in a shell script.
+Also, using -X as your very first option and -- as your last will ensure that
+the script works even if its name starts with a '(' or a '-', in addition
+to working with older versions of cl-launch.
 
 Note that if you don't need Lisp code to be loaded from your script,
-with everything happening in the --file --system and --init software
-specification, then you may instead use a simple #!/bin/sh shell script
-from which you exec /path/to/cl-launch -x ... -- "\$@".
+with everything happening in the build specification, then you may instead
+use a simple #!/bin/sh shell script from which you
+   exec /path/to/cl-launch -x ... -- "\$@".
 
 Also, in case you can't rely on cl-launch being at a fixed path, or if your
 shell and/or kernel combination doesn't support using cl-launch as a script
@@ -579,12 +580,8 @@ interpreter, then you may instead start your script with the following lines
   #!/bin/sh
   ":" ; exec cl-launch -X -- "\$0" "\$@" || exit 42
   (format t "It works!~%")
-In practice, I've found that machines with custom-compiled Linux kernels
-2.6.15 and later supported #!/usr/bin/cl-launch fine with a wide variety of
-shells (I tried all of posh 0.4.7, bash 2.05, bash 3.1, zsh 4.3.2, dash 0.5.3
-and busybox 1.01 ash), whereas other machines with a standard Linux
-kernel 2.6.11 from debian would not support it with any shell.
-Maybe an issue with kernel binfmt_misc configuration?
+Note that a mainline Linux kernel only supports the recursive #!
+implicit in #!/usr/bin/cl-launch since 2.6.27.9.
 
 
 DUMPING IMAGES
@@ -866,13 +863,6 @@ create_file () {
 ### Process options
 OPTION () { process_options "$@" ;}
 process_options () {
-  case "$#:$1" in
-    "1:-"*)
-      : ;;
-    "1:"*)
-      add_init_form "(princ(progn $1))(terpri)"
-      shift ;;
-  esac
   while [ $# -gt 0 ] ; do
     x="$1" ; shift
     case "$x" in
@@ -899,11 +889,13 @@ process_options () {
       -i|--init)
         add_init_form "$1" ; shift ;;
       -ip|--print)
-        add_init_form "(princ(progn $1))(terpri)" ; shift ;;
+        add_init_form "(uiop:println(progn $1))" ; shift ;;
       -iw|--write)
-        add_init_form "(write(progn $1))(terpri)" ; shift ;;
+        add_init_form "(uiop:writeln(progn $1))" ; shift ;;
       --entry)
         add_init_form "($1 uiop:*command-line-arguments*)" ; shift ;;
+      "("*)
+	add_init_form "(uiop:println(progn $x))" ;;
       -p|-pc|+p)
         ABORT "option $x is not supported anymore." \
 		"Use option -S instead." ;;
@@ -1167,7 +1159,7 @@ include_script_configuration_and_headers () {
 " ; include_configuration ; ECHOn "\
 # END OF CL-LAUNCH CONFIGURATION
 
-# This file was generated by CL-Launch ${CL_LAUNCH_VERSION}
+# This file was generated by cl-launch ${CL_LAUNCH_VERSION}
 " ; include_license
 }
 make_loader () {
@@ -1231,7 +1223,7 @@ extract_configuration () {
   : "READ => $LINE"
   case "$LINE" in
     "#| CL-LAUNCH"*" CONFIGURATION") : "read the CL comment start" ;;
-    *) : "Not a CL-Launch script" ; UNREAD "$LINE" ; UNREAD "$L1" ; return 2 ;;
+    *) : "Not a cl-launch script" ; UNREAD "$LINE" ; UNREAD "$L1" ; return 2 ;;
   esac
   while READ &&
     #: "READ => $LINE" &&
@@ -1499,7 +1491,7 @@ BEGIN_TESTS='(in-package :cl-user)(defvar *f* ())(defvar *err* 0)(defvar *begin*
 
 (defun tt () (dolist (x (reverse *f*)) (eval x)))
 (tst()(format t "Hello, world, ~A speaking.~%"
-#+asdf2 (cl-launch::call :asdf :implementation-type) #-asdf2 (lisp-implementation-type)))
+(uiop:implementation-identifier)))
 '
 END_TESTS="$(foo_require t begin)"'
 (tst t(if (equal "won" (first uiop::*command-line-arguments*))
@@ -1856,7 +1848,7 @@ install_bin () {
 print_shell_wrapper () {
   echo "# cl-launch ${CL_LAUNCH_VERSION} shell wrapper
 #   Find and execute the most appropriate supported Lisp implementation
-#   to evaluate software prepared with CL-Launch.
+#   to evaluate software prepared with cl-launch.
 #"
   include_license
   print_basic_functions
@@ -2337,43 +2329,49 @@ NIL
 (setf *print-readably* nil ; allegro 5.0 notably will bork without this
       *print-level* nil
       *load-verbose* nil *compile-verbose* nil *compile-print* nil *load-print* nil)
-(defvar cl-user::*asdf-directory-pathname*
-  (merge-pathnames #p"cl/asdf/" (user-homedir-pathname))
-  "directory where ASDF is installed, if not provided by your implementation.")
 
 (unless (member :asdf *features*)
   (ignore-errors (funcall 'require "asdf")))
 (unless (member :asdf *features*)
-  (ignore-errors (load (merge-pathnames "build/asdf.lisp" cl-user::*asdf-directory-pathname*))))
+  (ignore-errors (load (merge-pathnames "cl/asdf/build/asdf.lisp" (user-homedir-pathname)))))
+(unless (member :asdf *features*)
+  (ignore-errors (load "/usr/share/common-lisp/source/asdf/build/asdf.lisp")))
 (unless (member :asdf *features*)
   (error "Could not load ASDF."))
 
 (in-package :asdf))
 NIL
 ":" 't #-cl-launch ;'; cl_fragment<<'NIL'
-;; Make sure we use the latest ASDF available.
 (eval-when (:compile-toplevel :load-toplevel :execute)
 
-(ignore-errors
- (pushnew cl-user::*asdf-directory-pathname* *central-registry*)
- (defparameter asdf::*asdf-verbose* nil) ;; for old versions of ASDF 2
- (setf *load-verbose* nil asdf::*verbose-out* nil)
-   (handler-bind ((warning #'muffle-warning))
-     (operate 'load-op :asdf :verbose nil)))
+;; In case we only have ASDF1 or ASDF2 so far, try harder.
+(unless (member :asdf3 *features*)
+  (flet ((maybe-register (d)
+           (when (probe-file (merge-pathnames "asdf.asd" d))
+             (pushnew d *central-registry*))))
+    (or (find-system "asdf" nil)
+        (maybe-register (merge-pathnames "cl/asdf/" (user-homedir-pathname)))
+        (maybe-register "/usr/share/common-lisp/source/asdf/"))))
+
+;; Make sure we use the latest ASDF available.
+(defparameter asdf::*asdf-verbose* nil) ; for old versions of ASDF 2
+(setf *load-verbose* nil asdf::*verbose-out* nil)
+(handler-bind ((warning #'muffle-warning))
+  (operate 'load-op :asdf :verbose nil))
 
 (unless (asdf::version-satisfies (asdf::asdf-version) "3.0.1")
-  (error "cl-launch requires ASDF 3.0.1 or later")) ; fallback feature
+  (error "cl-launch requires ASDF 3.0.1 or later"))
 
 ;;;; Ensure package hygiene
-(defpackage :cl-launch
-  (:use :common-lisp :uiop :asdf))
+(uiop:define-package :cl-launch
+  (:use :common-lisp :uiop :asdf)
+  (:export #:compile-and-load-file))
 
 (in-package :cl-launch))
 NIL
 ":" 't #-cl-launch ;'; cl_fragment<<'NIL'
-;;;; CL-Launch Initialization code
+;;;; cl-launch initialization code
 (progn
-(export '(compile-and-load-file))
 (defvar *cl-launch-file* nil) ;; name of this very file
 (defvar *verbose* nil)
 (progn
@@ -2385,7 +2383,7 @@ NIL
   (defvar *temporary-file-prefix*
     (format nil "~Acl-launch-~A-" uiop:*temporary-directory* (getenvp "CL_LAUNCH_PID")))
   (defun make-temporary-filename (x)
-    (concatenate 'string *temporary-file-prefix* x))
+    (strcat *temporary-file-prefix* x))
   (defun register-temporary-filename (n)
     (push n *temporary-filenames*)
     n)
@@ -2404,7 +2402,7 @@ NIL
     (temporary-file-from-foo #'dump-sexp-to-file i x))
   (defun temporary-file-from-file (f x)
     (with-open-file (i f :direction :input :if-does-not-exist :error)
-        (temporary-file-from-stream i x)))
+      (temporary-file-from-stream i x)))
   (defun ensure-lisp-file-name (x &optional (name "load.lisp"))
     (let ((p (pathname x)))
       (if (equal (pathname-type p) "lisp")
@@ -2443,9 +2441,13 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
   ;; dependencies are not detected anyway (BAD). If/when they are, and
   ;; lacking better timestamps than the filesystem provides, you
   ;; should sleep after you generate your source code.
-  #+gcl
-  (setf source (ensure-lisp-file-name source (concatenate 'string (pathname-name source) ".lisp")))
-  (let* ((truesource (truename source))
+  (let* (#+gcl
+         (maybe-delete
+           (unless (equal (pathname-type source) "lisp")
+             (let ((temp (make-temporary-filename (strcat (pathname-name source) ".lisp"))))
+               (copy-file source temp)
+               (setf source temp))))
+         (truesource (truename source))
          (fasl (or output-file (compile-file-pathname* truesource)))
          (compiled-p
           (when (or force-recompile
@@ -2456,12 +2458,13 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
                 (compile-file* truesource :output-file fasl)
               (declare (ignorable warnings failures))
               (unless (equal (truename fasl) (truename path))
-                (error "CL-Launch: file compiled to ~A, expected ~A" path fasl))
+                (error "cl-launch: file compiled to ~A, expected ~A" path fasl))
               (when failures
-                (error "CL-Launch: failures while compiling ~A" source)))
+                (error "cl-launch: failures while compiling ~A" source)))
             t)))
     (when load
       (load* fasl :verbose verbose))
+    #+gcl (delete-file-if-exists maybe-delete)
     (values fasl compiled-p)))
 (defun load-file (source &key output-file)
   (declare (ignorable output-file))
@@ -2602,7 +2605,8 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
     (flet ((try (x) (when (probe-file* x) (return (load* x)))))
       (try (subpathname (user-homedir-pathname) ".quicklisp/setup.lisp"))
       (try (subpathname (user-homedir-pathname) "quicklisp/setup.lisp"))
-      (error "Couldn't find quicklisp in your home directory. Go get it at http://www.quicklisp.org/beta/index.html"))))
+      (error "Couldn't find quicklisp in your home directory. ~
+              Go get it at http://www.quicklisp.org/beta/index.html"))))
 
 (defun run (&key quicklisp source-registry build dump restart final init (quit 0))
   (pushnew :cl-launched *features*)
