@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper generator for Common Lisp software -*- Lisp -*-
-CL_LAUNCH_VERSION='3.22.2'
+CL_LAUNCH_VERSION='4.0.0'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -38,14 +38,15 @@ license_information
 
 ### Settings for the current installation -- adjust to your convenience
 ### Or see documentation for using commands -B install and -B install_bin.
-DEFAULT_LISPS="sbcl ccl clisp cmucl ecl abcl xcl scl allegro lispworks gclcvs gcl"
+DEFAULT_LISPS="sbcl ccl clisp cmucl ecl abcl scl allegro lispworks gcl xcl"
 DEFAULT_INCLUDE_PATH=
 DEFAULT_USE_CL_LAUNCHRC=
 DEFAULT_USE_CLBUILD=
+DEFAULT_USE_QUICKLISP=
 
 ### Initialize cl-launch variables
 unset \
-	SOFTWARE_FILE SOFTWARE_SYSTEM \
+	SOFTWARE_BUILD_FORMS \
 	SOFTWARE_FINAL_FORMS SOFTWARE_INIT_FORMS \
 	SOURCE_REGISTRY INCLUDE_PATH LISPS WRAPPER_CODE \
 	OUTPUT_FILE UPDATE \
@@ -60,6 +61,7 @@ LISPS="$DEFAULT_LISPS"
 INCLUDE_PATH="$DEFAULT_INCLUDE_PATH"
 USE_CL_LAUNCHRC="$DEFAULT_USE_CL_LAUNCHRC"
 USE_CLBUILD="$DEFAULT_USE_CLBUILD"
+USE_QUICKLISP="$DEFAULT_USE_QUICKLISP"
 
 UNREAD_DEPTH=0
 OUTPUT_FILE="!"
@@ -91,6 +93,8 @@ cat <<EOF
 Usage:
 	$PROGBASE '(lisp (form) to evaluate)'
 	    evaluate specified Lisp form, print the results followed by newline
+	$PROGBASE [...] script-file arguments...
+	    load specified Lisp script, passing arguments
 	$PROGBASE --execute [...] [-- arguments...]
 	    run the specified software without generating a script (default)
 	$PROGBASE --output SCRIPT [--file LISP_FILE] [--init LISP_FORM] [...]
@@ -110,21 +114,28 @@ Software specification:
  -w CODE	--wrap CODE          shell wrapper CODE to run in cl-launch
  -l LISP...	--lisp LISP...	     try use these LISP implementation(s)
  -m IMAGE       --image IMAGE        build from Lisp image IMAGE
- -f FILE	--file FILE	     load FILE first when building
+ -f FILE	--file FILE	     load lisp FILE while building
+		--load FILE	     same as above
  -S X		--source-registry X  override source registry of asdf systems
- -s SYSTEM	--system SYSTEM	     load asdf SYSTEM when building
- -r FUNC	--restart            restart from build by funcalling FUNC
- -i FORM	--init FORM	     evaluate initialization FORM after restart
+ -s SYSTEM	--system SYSTEM	     load asdf SYSTEM while building
+		--load-system SYSTEM same as above (buildapp compatibility)
+ -e FORM	--eval FORM	     evaluate FORM while building
+		--require MODULE     require MODULE while building
+ -r FUNC	--restart FUNC       restart from build by funcalling FUNC
+		--entry	FUNC	     (FUNC argv) after restart (buildapp compat.)
+ -i FORM	--init FORM	     evaluate FORM after restart
  -ip FORM	--print FORM	     evaluate and princ FORM after restart
  -iw FORM	--write FORM	     evaluate and write FORM after restart
  -I PATH        --include PATH       runtime PATH to cl-launch installation
  +I             --no-include         disable cl-launch installation feature
  -R             --rc                 try read /etc/cl-launchrc, ~/.cl-launchrc
  +R             --no-rc              skip /etc/cl-launchrc, ~/.cl-launchrc
- -b             --clbuild            use clbuild (with limitations, read docs)
+ -Q             --quicklisp          use quicklisp (see --more-help)
+ +Q             --no-quicklisp       do not use quicklisp
+ -b             --clbuild            use clbuild (see --more-help)
  +b             --no-clbuild         do not use clbuild
- -v             --verbose            be very noisy while building software
- -q             --quiet              be quiet while building software (default)
+ -v             --verbose            be quite noisy while building
+ -q             --quiet              be quite quiet while building (default)
 
 Output options:
  -x      -o !   --execute	     run the thing NOW (default)
@@ -148,14 +159,16 @@ print_more_help () {
 cat<<EOF
 INVOCATION OF CL-LAUNCH
 
-CL-Launch will create a shell script that, when invoked, will evaluate
-the specified Lisp software with an appropriate Common Lisp implementation.
+cl-launch will create a shell script that, when invoked, will evaluate
+the specified code with an appropriate Common Lisp implementation.
+cl-launch tries to follow the invocation conventions of both Unix script
+interpreters and Common Lisp implementations.
 
 A suggested short-hand name for cl-launch is cl (you may create a symlink
 if it isn't included in your operating system's cl-launch package).
 
-To work properly, CL-Launch 3.21 depends on ASDF 3 or later,
-or else at least ASDF 2.015 and ASDF-DRIVER configured in your source-registry.
+To work properly, cl-launch 4.0 depends on ASDF 3.0 or later, and on
+its portability layer UIOP to manage compilation and image life cycle.
 
 The software is specified as the execution, in this order, of:
 * optionally having your Lisp start from a Lisp IMAGE (option --image)
@@ -167,14 +180,14 @@ The software is specified as the execution, in this order, of:
 * optionally evaluating a series of initialization FORMS (option --init)
 
 General note on cl-launch invocation: options are processed from left to right;
-in case of conflicting or redundant options, the latter override the former.
+usually, repeated options accumulate their effects, with the earlier instances
+taking effect before later instances. In case of conflicting or redundant
+options, the latter override the former.
 
-
-The cl-launch 3.21 relies on ASDF 3 and its ASDF-DRIVER
-to manage compilation and image life cycle.
 
 cl-launch defines a package :cl-launch that exports the following symbols:
-   *arguments* getenv quit compile-and-load-file load-system
+   compile-and-load-file
+Runtime functionality previously provided by cl-launch is now provided by UIOP.
 See below section 'CL-LAUNCH RUNTIME API'.
 
 The cl-launch header will try to load ASDF from various sources until
@@ -190,8 +203,7 @@ and
    /usr/share/common-lisp/source/cl-asdf/asdf.lisp
 and finally it will look in your
 home directory under ~/cl/asdf/asdf.lisp.
-If asdf is not found, cl-launch will proceed but you won't be able to use it
-and the --system option will be unavailable.
+If ASDF3 is not found, cl-launch will be unable to proceed.
 
 Only one input files may be specified with option --file. Now, if the specified
 filename is '-' (without the quotes), then the standard input is used. You may
@@ -547,7 +559,7 @@ what you want, you may use cl-launch as a script interpret the following way
 For instance, you may write the following script (stripping leading spaces):
   #!/usr/bin/cl-launch -X --init '(format t "foo~%")' --
   (format t "hello, world~%")
-  (write cl-launch:*arguments*) (terpri)
+  (write uiop:*command-line-arguments*) (terpri)
 The limitation is that the first argument MUST be '-X' (upper case matters,
 and so does the following space actually), the last one MUST be '--' and all
 your other arguments (if any) must fit on the first line, although said line
@@ -621,30 +633,24 @@ CL-LAUNCH RUNTIME API
 
 cl-launch provides the following Lisp functions:
 
-Variable cl-launch:*arguments* contains the command-line arguments
-used to invoke the software.
-
-Function cl-launch:getenv allows to query (but not modify) the environment
-variables, as in (getenv "HOME"), returning nil when the variable is unbound.
-
-Function cl-launch:load-system takes as an argument the name of an asdf system
-and the keyword argument verbose, and loads specified system with specified
-verbosity.
-
 Function cl-launch:compile-and-load-file takes as an argument a source pathname
 designator, and keyword arguments force-recompile (default NIL) and verbose
 (default NIL). It will arrange to compile the specified source file if it is
 explicitly requested, or if the file doesn't exist, or if the fasl is not
 up-to-date. It will compile and load with the specified verbosity. It will
-take use asdf:compile-file-pathname* to determine the fasl pathname.
+take use uiop:compile-file-pathname* to determine the fasl pathname.
 
-Function cl-launch:quit will cause the current Lisp application to exit.
-It takes two optional arguments code with default value 0, and finish-output
-with default value t. The first is to be used as the process exit code, the
-second specifies whether to call finish-output on *standard-output* and
-*error-output*. Note that you should use (finish-output) and otherwise flush
-buffers as applicable before you quit, not just to be standard-compliant, but
-also to support ccl and any other Lisp implementation that do buffering.
+The following variables and functions previous provided by cl-launch
+have the following replacement from ASDF and UIOP:
+
+Variable cl-launch:*arguments* is replaced by uiop:*command-line-arguments*.
+
+Function cl-launch:getenv is replaced by uiop:getenv.
+
+Function cl-launch:load-system is replaced by asdf:load-system.
+
+Function cl-launch:quit is replaced by uiop:quit
+(beware: the lambda-list is slightly different).
 
 Additionally, environment variables CL_LAUNCH_PID and CL_LAUNCH_FILE
 will be set to the process ID and the script invocation filename respectively.
@@ -709,7 +715,7 @@ foo.sh: cl-launch.sh foo.lisp
 ### A more complex example using all options.
 run-foo.sh: cl-launch.sh preamble.lisp
 	./cl-launch.sh --output run-foo.sh --file preamble.lisp --system foo \\
-	--init "(foo:main cl-launch:*arguments*)" \\
+	--init "(foo:main uiop:*command-line-arguments*)" \\
 	--source-registry \${PREFIX}/cl-foo/systems: \\
 	--lisp "ccl sbcl" --wrap 'SBCL=/usr/local/bin/sbcl-no-unicode' \\
 	--no-include
@@ -797,7 +803,14 @@ Local defaults for generated scripts:
   will generate scripts that do not use clbuild by default"
   else
     echo "\
-  will generate scripts that use clbuild"
+  will generate scripts that use clbuild by default"
+  fi
+  if [ -z "$DEFAULT_USE_QUICKLISP" ] ; then
+    echo "\
+  will generate scripts that do not use quicklisp by default"
+  else
+    echo "\
+  will generate scripts that use quicklisp by default"
   fi
   echo
   exit
@@ -811,9 +824,13 @@ ECHOn () { printf '%s' "$*" ;}
 simple_term_p () {
   case "$1" in *[!a-zA-Z0-9-+_,.:=%/]*) return 1 ;; *) return 0 ;; esac
 }
-kwote0 () { ECHOn "$1" | sed -e "s/\([\\\\\"\$\`]\)/\\\\\\1/g" ;}
+if [ -n "$BASH_VERSION$ZSH_VERSION" ] ; then
+  kwote0 () { a="${1//\\/\\\\}" ; a="${a//\`/\\\`}" ; a="${a//\$/\\\$}" ; printf %s "${a//\"/\\\"}" ;}
+else
+  kwote0 () { ECHOn "$1" | sed -e "s/\([\\\\\"\$\`]\)/\\\\\\1/g" ;}
+fi
 kwote () { if simple_term_p "$1" ; then ECHOn "$1" ; else kwote0 "$1" ; fi ;}
-load_form_0 () { echo "(load $1 :verbose nil :print nil)" ;}
+load_form_0 () { echo "(cl:load $1 :verbose nil :print nil)" ;}
 load_form () { load_form_0 "\"$(kwote "$1")\"" ;}
 ECHO () { printf '%s\n' "$*" ;}
 DBG () { ECHO "$*" >& 2 ;}
@@ -869,10 +886,14 @@ process_options () {
         export CL_LAUNCH_VERBOSE=t ;;
       -q|--quiet)
         unset CL_LAUNCH_VERBOSE ;;
-      -f|--file)
-	SOFTWARE_FILE="$1" ; shift ;;
-      -s|--system)
-	SOFTWARE_SYSTEM="$1" ; shift ;;
+      -e|--eval)
+	add_build_form "(:eval-input \"$(kwote "$1")\")" ; shift ;;
+      -f|--file|--load)
+	add_build_form "$(load_form "$1")" ; shift ;;
+      -s|--system|--load-system)
+	add_build_form "(:load-system \"$1\")" ; shift ;;
+      --require)
+	add_build_form "(require \"$(kwote "$1")\")" ; shift ;;
       -F|--final)
         add_final_form "$1" ; shift ;;
       -i|--init)
@@ -881,6 +902,8 @@ process_options () {
         add_init_form "(princ(progn $1))(terpri)" ; shift ;;
       -iw|--write)
         add_init_form "(write(progn $1))(terpri)" ; shift ;;
+      --entry)
+        add_init_form "($1 uiop:*command-line-arguments*)" ; shift ;;
       -p|-pc|+p)
         ABORT "option $x is not supported anymore." \
 		"Use option -S instead." ;;
@@ -905,6 +928,10 @@ process_options () {
         USE_CLBUILD=t ;;
       +b|--no-clbuild)
         USE_CLBUILD= ;;
+      -Q|--quicklisp)
+        USE_QUICKLISP=t ;;
+      +Q|--no-quicklisp)
+        USE_QUICKLISP= ;;
       -o|--output)
 	OUTPUT_FILE="$1" ; shift ;;
       -x|--execute)
@@ -917,9 +944,9 @@ process_options () {
         fi
 	;;
       -X) OPTION -x
-        #OPTION -iw "cl-launch::*arguments*"
-        OPTION -i "(cl-launch::compile-and-load-file (pop cl-launch::*arguments*))"
-        #OPTION -i "$(load_form_0 "(pop cl-launch::*arguments*)")"
+        #OPTION -iw "uiop:*command-line-arguments*"
+        OPTION -i "(cl-launch::compile-and-load-file (pop uiop:*command-line-arguments*))"
+        #OPTION -i "$(load_form_0 "(pop uiop:*command-line-arguments*)")"
         ;;
       -X' '*)
         # DBG "Working around sh script script limitation..."
@@ -952,6 +979,10 @@ process_options () {
 	DBG "Unrecognized command line argument '$x'" ; mini_help_abort ;;
     esac
   done
+}
+add_build_form () {
+        SOFTWARE_BUILD_FORMS="$SOFTWARE_BUILD_FORMS${SOFTWARE_BUILD_FORMS+
+}$1"
 }
 add_init_form () {
         SOFTWARE_INIT_FORMS="$SOFTWARE_INIT_FORMS${SOFTWARE_INIT_FORMS+
@@ -1073,8 +1104,11 @@ print_lisp_launch () {
     .) ECHOn " :load :self" ;;
     *) ECHOn " :load \"$(kwote "$SOFTWARE_FILE")\""
   esac
-  if [ -n "${SOFTWARE_SYSTEM}" ] ; then
-    ECHOn " :system :${SOFTWARE_SYSTEM}"
+  if [ -n "${USE_QUICKLISP}" ] ; then
+    ECHOn " :quicklisp t"
+  fi
+  if [ -n "${SOFTWARE_BUILD_FORMS}" ] ; then
+    ECHOn " :build '(${SOFTWARE_BUILD_FORMS})"
   fi
   if [ -n "${SOFTWARE_FINAL_FORMS}" ] ; then
     ECHOn " :final \"$(kwote "${SOFTWARE_FINAL_FORMS}")\""
@@ -1455,7 +1489,7 @@ BEGIN_TESTS='(in-package :cl-user)(defvar *f* ())(defvar *err* 0)(defvar *begin*
 #+asdf2 (cl-launch::call :asdf :implementation-type) #-asdf2 (lisp-implementation-type)))
 '
 END_TESTS="$(foo_require t begin)"'
-(tst t(if (equal "won" (first cl-launch::*arguments*))
+(tst t(if (equal "won" (first uiop::*command-line-arguments*))
 (format t "argument passing worked, ")
 (progn (incf *err*) (format t "argument passing failed (got ~S), " (cl-launch::raw-command-line-arguments))))
 (if (equal "doh" (cl-launch::getenv "DOH"))
@@ -1671,8 +1705,7 @@ do_tests () {
     image*:dump*:ecl) ;;
     # we don't know how to dump at all with ABCL, XCL
     *:dump*:abcl|image*:*:abcl|*:dump*:xcl|image*:*:xcl) ;;
-    # Actually, even dumping is largely broken on ECL as of 3.010 + ASDF 2.015
-    *:dump*:ecl|image*:*:ecl) ;;
+    # *:dump*:ecl|image*:*:ecl) ;;
     *)
   for IF in "noinc" "noinc file" "inc" "inc1 file" "inc2 file" ; do
   TDIF="$TM$TD$IF"
@@ -1756,12 +1789,12 @@ print_cl_launch_asd () {
 ;; cl-launch also used to be used as a way to redirect fasls, like
 ;; asdf-binary-locations or common-lisp-controller, in times before ASDF 2.
 ;;
-;; It is only safe to upgrade asdf itself as part of an asdf operation
+;; It is only safe to upgrade ASDF itself as part of an ASDF operation
 ;; if the initial ASDF is more recent than 2.014.8.
 ;; If the initial ASDF isn't, you're likely in trouble.
 ;;
 (asdf:defsystem :cl-launch
-  :depends-on (#-asdf3 :asdf-driver) ; we need asdf-driver, included in asdf 3 and later
+  :depends-on ((:version :asdf "3.0.1")) ; we need UIOP, included in ASDF 3 and later
   :components ((:file "launcher")))
 END
 }
@@ -1771,7 +1804,7 @@ print_build_xcvb () {
 (module
   (:fullname "cl-launch"
    :supersedes-asdf ("cl-launch")
-   :build-depends-on ((:asdf "/asdf-driver"))
+   :build-depends-on ((:asdf "/uiop"))
    :depends-on ("launcher")))
 END
 }
@@ -1794,10 +1827,12 @@ configure_launcher () {
       's,^\(DEFAULT_LISPS\)=.*$,\1="'"${1}"'",
        s,^\(DEFAULT_INCLUDE_PATH\)=.*$,\1='"${2%/}"',
        s,^\(DEFAULT_USE_CL_LAUNCHRC\)=.*$,\1="'"${3}"'",
-       s,^\(DEFAULT_USE_CLBUILD\)=.*$,\1="'"${4}"'",'
+       s,^\(DEFAULT_USE_CLBUILD\)=.*$,\1="'"${4}"'",
+       s,^\(DEFAULT_USE_QUICKLISP\)=.*$,\1="'"${5}"'",'
 }
 print_configured_launcher () {
-  configure_launcher "$LISPS" "$INCLUDE_PATH" "$USE_CL_LAUNCHRC" "$USE_CLBUILD" < "$PROG"
+  configure_launcher \
+  "$LISPS" "$INCLUDE_PATH" "$USE_CL_LAUNCHRC" "$USE_CLBUILD" "$USE_QUICKLISP" < "$PROG"
 }
 install_bin () {
   DO create_file 755 "$OUTPUT_FILE" print_configured_launcher
@@ -2072,7 +2107,7 @@ prepare_arg_form () {
     F="$F\"$(kwote "$arg")\""
   done
   MAYBE_PACKAGE_FORM="$PACKAGE_FORM"
-  LAUNCH_FORMS="(defparameter cl-launch::*arguments*'($F))${LAUNCH_FORMS}"
+  LAUNCH_FORMS="(setf uiop:*command-line-arguments*'($F))${LAUNCH_FORMS}"
 }
 # Aliases
 implementation_alisp () {
@@ -2313,39 +2348,29 @@ NIL
    (handler-bind ((warning #'muffle-warning))
      (operate 'load-op :asdf :verbose nil)))
 
-(unless (member :asdf3 *features*)
-  (unless (asdf::version-satisfies (asdf::asdf-version) "2.15")
-    (error "CL-Launch requires ASDF 2.015 or later")) ; fallback feature
-  (asdf:load-system :asdf-driver))
+(unless (asdf::version-satisfies (asdf::asdf-version) "3.0.1")
+  (error "cl-launch requires ASDF 3.0.1 or later")) ; fallback feature
 
 ;;;; Ensure package hygiene
-#+gcl2.6
-(unless (find-package :cl-launch) (make-package :cl-launch :use '(:lisp)))
-#-gcl2.6
 (defpackage :cl-launch
-  (:use :common-lisp :asdf/driver :asdf)
-  (:export #:compile-and-load-file))
+  (:use :common-lisp :uiop :asdf))
 
 (in-package :cl-launch))
 NIL
 ":" 't #-cl-launch ;'; cl_fragment<<'NIL'
 ;;;; CL-Launch Initialization code
 (progn
+(export '(compile-and-load-file))
 (defvar *cl-launch-file* nil) ;; name of this very file
 (defvar *verbose* nil)
 (progn
-  (defun call-with-new-file (n f)
-    (with-open-file (o n :direction :output :if-exists :error :if-does-not-exist :create)
-      (funcall f o)))
   (defun dump-stream-to-file (i n)
-    (call-with-new-file n (lambda (o) (copy-stream-to-stream i o))))
+    (with-output-file (o n) (copy-stream-to-stream i o)))
   (defun dump-sexp-to-file (x n)
-    (call-with-new-file
-     n
-     (lambda (o) (write x :stream o :pretty t :readably t))))
+    (with-output-file (o n) (write x :stream o :pretty t :readably t)))
   (defvar *temporary-filenames* nil)
   (defvar *temporary-file-prefix*
-    (format nil "~Acl-launch-~A-" asdf/driver:*temporary-directory* (getenvp "CL_LAUNCH_PID")))
+    (format nil "~Acl-launch-~A-" uiop:*temporary-directory* (getenvp "CL_LAUNCH_PID")))
   (defun make-temporary-filename (x)
     (concatenate 'string *temporary-file-prefix* x))
   (defun register-temporary-filename (n)
@@ -2360,12 +2385,13 @@ NIL
   (defun temporary-file-from-stream (i x)
     (temporary-file-from-foo #'dump-stream-to-file i x))
   (defun temporary-file-from-string (i x)
-    (temporary-file-from-foo #'princ i x))
+    (temporary-file-from-foo
+     #'(lambda (i n) (with-output-file (o n) (princ i o))) i x))
   (defun temporary-file-from-sexp (i x)
     (temporary-file-from-foo #'dump-sexp-to-file i x))
   (defun temporary-file-from-file (f x)
     (with-open-file (i f :direction :input :if-does-not-exist :error)
-      (temporary-file-from-stream i x)))
+        (temporary-file-from-stream i x)))
   (defun ensure-lisp-file-name (x &optional (name "load.lisp"))
     (let ((p (pathname x)))
       (if (equal (pathname-type p) "lisp")
@@ -2404,7 +2430,7 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
   ;; dependencies are not detected anyway (BAD). If/when they are, and
   ;; lacking better timestamps than the filesystem provides, you
   ;; should sleep after you generate your source code.
-  #+(and gcl (not gcl2.6))
+  #+gcl
   (setf source (ensure-lisp-file-name source (concatenate 'string (pathname-name source) ".lisp")))
   (let* ((truesource (truename source))
          (fasl (or output-file (compile-file-pathname* truesource)))
@@ -2426,9 +2452,9 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
     (values fasl compiled-p)))
 (defun load-file (source &key output-file)
   (declare (ignorable output-file))
-  #-(or gcl2.6 (and ecl (not dlopen)))
+  #-(or gcl (and ecl (not dlopen)))
   (compile-and-load-file source :verbose *verbose* :output-file output-file)
-  #+gcl2.6
+  #+gcl
   (let* ((pn (parse-namestring source))) ; when compiling, gcl 2.6 will always
     (if (pathname-type pn) ; add a type .lsp if type is missing, to avoid compilation
       (compile-and-load-file source :verbose *verbose* :output-file output-file)
@@ -2456,105 +2482,123 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
 
 (asdf::register-preloaded-system "cl-launch")
 
-(defun do-build-and-load (load system restart final init quit)
-  (etypecase load
-    (null nil)
-    ((eql t) (load* nil))
-    (stream (load* load))
-    ((eql :self) (load-file *cl-launch-file*))
-    ((or pathname string) (load-file load)))
-  (when system
-    (load-systems system))
+(defun unsafify (lude)
+  (strcat "(in-package :cl-user) " lude))
+
+(defun build-and-load (build restart final init quit)
+  (dolist (x build)
+    (ecase (first x)
+      ((:eval-input :load-system require)
+       (symbol-call :asdf (first x) (second x)))
+      ((load)
+       (etypecase (second x)
+         (null nil)
+         ((eql t) (load* nil))
+         (stream (load* (second x)))
+         ((eql :self) (load-file *cl-launch-file*))
+         ((or pathname string) (load-file (second x)))))))
   (when final
-    (load-from-string final))
-  (setf *image-prelude* init
+    (eval-input (unsafify final)))
+  (setf *image-prelude* (unsafify init)
         *image-entry-point* (when restart (ensure-function restart))
         *lisp-interaction* (not quit)))
 
-(defun build-and-load (load system restart final init quit)
-  (unwind-protect
-       (do-build-and-load load system restart final init quit)
-    #+(and gcl (not gcl2.6))
-    (cleanup-temporary-files)))
-
-
-(defun build-and-run (load system restart final init quit)
-  (build-and-load load system restart final init quit)
+(defun build-and-run (build restart final init quit)
+  (build-and-load build restart final init quit)
   (restore-image))
 
 #-ecl
-(defun build-and-dump (dump load system restart final init quit)
-  (build-and-load load system restart final init quit)
+(defun build-and-dump (dump build restart final init quit)
+  (build-and-load build restart final init quit)
   (dump-image dump :executable (getenvp "CL_LAUNCH_STANDALONE"))
   (quit 0))
 
 ;;; Attempt at compiling directly with ECL's make-build and temporary wrapper asd's
-#+ecl (defvar *in-compile* nil)
 #+ecl
-(defun build-and-dump (dump load system restart final init quit)
-  (unwind-protect
-       (let* ((*compile-verbose* *verbose*)
-              (*in-compile* t)
-              (c::*suppress-compiler-warnings* (not *verbose*))
-              (c::*suppress-compiler-notes* (not *verbose*))
-              (*features* (remove :cl-launch *features*))
-              (header (or *compile-file-pathname* *load-pathname* (getenvp "CL_LAUNCH_HEADER")))
-              (header-file (ensure-lisp-file header "header.lisp"))
-              (load-file (when load (ensure-lisp-file load "load.lisp")))
-              (standalone (getenvp "CL_LAUNCH_STANDALONE"))
-              (init-code
-               `(progn
-                  (unless *in-compile*
-                    (setf
-                     *package* (find-package :cl-user)
-                     *load-verbose* nil
-                     *dumped* ,(if standalone :standalone :wrapped)
-                     *arguments* nil
-                     ;;,(symbol* :asdf :*source-registry*) nil
-                     ;;,(symbol* :asdf :*output-translations*) nil
-                     ,@(when restart `(*restart* (read-function ,restart)))
-                     *init-forms* ,init)
-                    ,@(unless quit `(*quit* nil)))
-                 ,(if standalone '(asdf/image:restore-image) '(si::top-level))))
-              (final-file (temporary-file-from-string final "final.lisp"))
-              (init-file (temporary-file-from-sexp init-code "init.lisp"))
-              (prefix-sys (pathname-name (temporary-filename "prefix")))
-              (program-sys (pathname-name (temporary-filename "program")))
-              (prefix-sysdef
-               `(,(symbol* :asdf :defsystem) ,prefix-sys
-                 :depends-on () :serial t
-                 :components ((:file "header" :pathname ,(truename header-file))
-                              ,@(when load-file `((:file "load" :pathname ,(truename load-file)))))))
-              (program-sysdef
-               `(,(symbol* :asdf :defsystem) ,program-sys
-                 :serial t
-                 :depends-on (,prefix-sys
-                              ,@(when system `(,system))
-                              ,prefix-sys) ;; have the prefix first, whichever order asdf traverses
-                 :components ((:file "final" :pathname ,(truename final-file))
-                              (:file "init" :pathname ,(truename init-file)))))
-              (prefix-asd (temporary-file-from-sexp prefix-sysdef "prefix.asd"))
-              (program-asd (temporary-file-from-sexp program-sysdef "program.asd")))
-         (load prefix-asd)
-         (load program-asd)
-         (call :asdf :make-build program-sys :type :program)
-         (si:system (format nil "cp -p ~S ~S"
-                            (namestring (first (call :asdf :output-files
-                                                     (make-instance (symbol* :asdf :program-op))
-                                                     (call :asdf :find-system program-sys))))
-                            dump)))
-    (cleanup-temporary-files))
-  (quit))
+(progn
+  (defvar *in-compile* nil)
+  (defvar *dependency-counter* 0)
+  (defun make-dependency (fun arg)
+    (ecase fun
+      ((load)
+       (let* ((load-file (ensure-lisp-file arg "load.lisp"))
+              (dep-name (format nil "build-~D" *dependency-counter*))
+              (dep-sys (pathname-name (temporary-filename dep-name)))
+              (prev-dep-name (when (plusp *dependency-counter*)
+                               (format nil "build-~D" (1- *dependency-counter*))))
+              (prev-dep-sys (when prev-dep-name (pathname-name (temporary-filename prev-dep-name))))
+              (dep-def `(defsystem ,dep-sys
+                          :depends-on ,(ensure-list prev-dep-sys)
+                          :components ((:file ,(pathname-name load-file)
+                                        :pathname ,(truename load-file)))))
+              (dep-asd (temporary-file-from-sexp dep-def dep-name)))
+         (incf *dependency-counter*)
+         (asdf/find-system:load-asd dep-asd :name dep-sys)
+         dep-sys))
+      ((:eval-input)
+       (with-input (i arg)
+         (make-dependency 'load i)))
+      ((:require)
+       `(:require ,arg))
+      ((:load-system)
+       arg)))
+  (defun build-and-dump (dump build restart final init quit)
+    (unwind-protect
+         (let* ((*compile-verbose* *verbose*)
+                (*in-compile* t)
+                (c::*suppress-compiler-warnings* (not *verbose*))
+                (c::*suppress-compiler-notes* (not *verbose*))
+                (*features* (remove :cl-launch *features*))
+                (header (or *compile-file-pathname* *load-pathname* (getenvp "CL_LAUNCH_HEADER")))
+                (header-file (ensure-lisp-file header "header.lisp"))
+                (standalone (getenvp "CL_LAUNCH_STANDALONE"))
+                (init-code
+                  `(progn
+                     (unless *in-compile*
+                       (setf
+                        *package* (find-package :cl-user)
+                        *load-verbose* nil
+                        *dumped* ,(if standalone :standalone :wrapped)
+                        uiop:*command-line-arguments* nil
+                        ;;,(symbol* :asdf :*source-registry*) nil
+                        ;;,(symbol* :asdf :*output-translations*) nil
+                        ,@(when restart `(*restart* (read-function ,restart)))
+                        *init-forms* ,init)
+                       ,@(unless quit `(*quit* nil)))
+                     ,(if standalone '(asdf/image:restore-image) '(si::top-level))))
+                (final-file (temporary-file-from-string final "final.lisp"))
+                (init-file (temporary-file-from-sexp init-code "init.lisp"))
+                (dependencies (loop :for (fun arg) :in `((load ,header-file) ,@build)
+                                    :collect (make-dependency fun arg)))
+                (program-sys (pathname-name (temporary-filename "program")))
+                (program-sysdef
+                  `(defsystem ,program-sys
+                    :serial t
+                    :depends-on ,dependencies
+                    :components ((:file "final" :pathname ,(truename final-file))
+                                 (:file "init" :pathname ,(truename init-file)))))
+                (program-asd (temporary-file-from-sexp program-sysdef "program.asd")))
+           (asdf/find-system:load-asd program-asd)
+           (operate 'program-op program-sys)
+           (rename-file-overwriting-target (output-file 'program-op program-sys) dump))
+      (cleanup-temporary-files))
+    (quit)))
 
-;;(handler-bind (#+ecl (si::simple-package-error (lambda (x) (declare (ignore x)) (invoke-restart 'continue)))) (format *trace-output* "Enabling some debugging~%") #+ecl (trace c::builder c::build-fasl c:build-static-library c:build-program ensure-lisp-file-name ensure-lisp-file cleanup-temporary-files delete-package) #+ecl (setf c::*compiler-break-enable* t) (trace load-file load-systems build-and-dump build-and-run run compile-and-load-file load compile-file) (setf *verbose* t *load-verbose* t *compile-verbose* t))
+(defun load-quicklisp ()
+  (block nil
+    (flet ((try (x) (when (probe-file* x) (return (load* x)))))
+      (try (subpathname (user-homedir-pathname) ".quicklisp/setup.lisp"))
+      (try (subpathname (user-homedir-pathname) "quicklisp/setup.lisp"))
+      (error "Couldn't find quicklisp in your home directory. Go get it at http://www.quicklisp.org/beta/index.html"))))
 
-(defun run (&key source-registry load system dump restart final init (quit 0))
+(defun run (&key quicklisp source-registry build dump restart final init (quit 0))
   (pushnew :cl-launched *features*)
   (compute-arguments)
   (when source-registry (initialize-source-registry source-registry))
+  (when quicklisp (load-quicklisp))
   (if dump
-      (build-and-dump dump load system restart final init quit)
-      (build-and-run load system restart final init quit)))
+      (build-and-dump dump build restart final init quit)
+      (build-and-run build restart final init quit)))
 
 (pushnew :cl-launch *features*))
 NIL
