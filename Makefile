@@ -85,6 +85,7 @@ push:
 	git status
 
 debian-package-all:
+	./release.lisp debian-package-all
 
 quickrelease: reinstall_here
 	./release.lisp quickrelease

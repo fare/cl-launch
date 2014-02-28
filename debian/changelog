@@ -1,3 +1,13 @@
+cl-launch (4.0.1-1) unstable; urgency=low
+
+  * Speed up startup time by not upgrading ASDF unless needed.
+  * Fix 4.0.0 bugs: support old implementations with older ASDF;
+    unbreak working from cl-launch dumped image.
+  * Add alias -E for --entry.
+  * Eat our own dogfood with a CL release script.
+
+ -- Francois-Rene Rideau <fare@tunes.org>  Mon, 28 Feb 2014 17:15:26 -0500
+
 cl-launch (4.0.0-1) unstable; urgency=low
 
   * Build with --eval --require --file --system in order of appearance.
