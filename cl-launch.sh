@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper generator for Common Lisp software -*- Lisp -*-
-CL_LAUNCH_VERSION='4.0.0'
+CL_LAUNCH_VERSION='4.0.0.1'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -1869,7 +1869,7 @@ print_shell_wrapper_body () {
   cat <<'EOF'
 DO_LISP=do_exec_lisp
 HASH_BANG_FORM='(set-dispatch-macro-character #\# #\! (lambda(stream char arg)(declare(ignore char arg))(values(read-line stream))))'
-PACKAGE_FORM=" #.(progn(defpackage :cl-launch (:use :cl))())"
+PACKAGE_FORM=" #.(progn(defpackage :uiop (:use :cl))())"
 MAYBE_PACKAGE_FORM=
 PROGN="(progn"
 NGORP=")"
@@ -2112,7 +2112,7 @@ prepare_arg_form () {
     F="$F\"$(kwote "$arg")\""
   done
   MAYBE_PACKAGE_FORM="$PACKAGE_FORM"
-  LAUNCH_FORMS="(setf uiop:*command-line-arguments*'($F))${LAUNCH_FORMS}"
+  LAUNCH_FORMS="(defparameter uiop::*command-line-arguments*'($F))${LAUNCH_FORMS}"
 }
 # Aliases
 implementation_alisp () {
@@ -2362,18 +2362,20 @@ NIL
         (uiop::*uninteresting-conditions* (cons 'warning uiop::*uninteresting-conditions*)))
     (operate 'load-op :asdf :verbose nil))))
 NIL
-":" 't #-cl-launch ;'; cl_fragment<<'NIL' # Because of ASDF punting, this ASDF package may be a new one.
-(unless (asdf::version-satisfies (asdf::asdf-version) "3.0.1")
-  (error "cl-launch requires ASDF 3.0.1 or later"))
+":" 't #-cl-launch ;'; cl_fragment<<'NIL'
+;; Because of ASDF upgrade punting, this ASDF package may be a new one.
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (unless (asdf:version-satisfies (asdf:asdf-version) "3.0.1")
+    (error "cl-launch requires ASDF 3.0.1 or later")))
 NIL
 ":" 't #-cl-launch ;'; cl_fragment<<'NIL'
 ;;;; Create cl-launch with UIOP.
 (progn
-  (uiop:define-package :cl-launch
-    (:use :common-lisp :uiop :asdf)
-    (:export #:compile-and-load-file))
+(uiop:define-package :cl-launch
+  (:use :common-lisp :uiop :asdf)
+  (:export #:compile-and-load-file))
 
-  (in-package :cl-launch))
+(in-package :cl-launch))
 NIL
 ":" 't #-cl-launch ;'; cl_fragment<<'NIL'
 ;;;; cl-launch initialization code
