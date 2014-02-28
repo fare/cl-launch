@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper generator for Common Lisp software -*- Lisp -*-
-CL_LAUNCH_VERSION='4.0.0.1'
+CL_LAUNCH_VERSION='4.0.0.2'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -2350,22 +2350,23 @@ NIL
            (when (probe-file (merge-pathnames "asdf.asd" d))
              (pushnew d *central-registry*))))
     (or (let ((asdf (find-system "asdf" nil)))
-          (and asdf (version-satisfies asdf "3.0.1")))
+          (and asdf #+asdf2 (version-satisfies asdf "3.0.1")))
         (maybe-register (merge-pathnames "cl/asdf/" (user-homedir-pathname)))
         (maybe-register "/usr/share/common-lisp/source/asdf/"))))
 
-;; Make sure we use the latest ASDF available.
-(defparameter asdf::*asdf-verbose* nil) ; for old versions of ASDF 2
+;; Make sure we use the latest ASDF available, if not 3.0.1
+(defparameter asdf::*asdf-verbose* nil) ; for old versions of ASDF such as XCL's 2.014.2
 (setf *load-verbose* nil asdf::*verbose-out* nil)
-(handler-bind ((warning #'muffle-warning))
-  (let (#+(and abcl asdf3) ; Why does the above not suffice?
-        (uiop::*uninteresting-conditions* (cons 'warning uiop::*uninteresting-conditions*)))
-    (operate 'load-op :asdf :verbose nil))))
+(unless (or #+asdf2 (asdf:version-satisfies (asdf:asdf-version) "3.0.1"))
+  (handler-bind ((warning #'muffle-warning))
+    (let (#+(and abcl asdf3) ; Why does the above not suffice?
+          (uiop::*uninteresting-conditions* (cons 'warning uiop::*uninteresting-conditions*)))
+      (operate 'load-op :asdf :verbose nil)))))
 NIL
 ":" 't #-cl-launch ;'; cl_fragment<<'NIL'
 ;; Because of ASDF upgrade punting, this ASDF package may be a new one.
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (unless (asdf:version-satisfies (asdf:asdf-version) "3.0.1")
+  (unless (or #+asdf2 (asdf:version-satisfies (asdf:asdf-version) "3.0.1"))
     (error "cl-launch requires ASDF 3.0.1 or later")))
 NIL
 ":" 't #-cl-launch ;'; cl_fragment<<'NIL'
@@ -2389,7 +2390,7 @@ NIL
     (with-output-file (o n) (write x :stream o :pretty t :readably t)))
   (defvar *temporary-filenames* nil)
   (defvar *temporary-file-prefix*
-    (format nil "~Acl-launch-~A-" uiop:*temporary-directory* (getenvp "CL_LAUNCH_PID")))
+    (format nil "~Acl-launch-~A-" *temporary-directory* (getenvp "CL_LAUNCH_PID")))
   (defun make-temporary-filename (x)
     (strcat *temporary-file-prefix* x))
   (defun register-temporary-filename (n)
@@ -2534,6 +2535,7 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
 #-ecl
 (defun build-and-dump (dump build restart final init quit)
   (build-and-load build restart final init quit)
+  (remove :cl-launched *features*)
   (dump-image dump :executable (getenvp "CL_LAUNCH_STANDALONE"))
   (quit 0))
 
@@ -2583,7 +2585,7 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
                         *package* (find-package :cl-user)
                         *load-verbose* nil
                         *dumped* ,(if standalone :standalone :wrapped)
-                        uiop:*command-line-arguments* nil
+                        *command-line-arguments* nil
                         ;;,(symbol* :asdf :*source-registry*) nil
                         ;;,(symbol* :asdf :*output-translations*) nil
                         ,@(when restart `(*restart* (read-function ,restart)))
