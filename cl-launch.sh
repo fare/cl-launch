@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper generator for Common Lisp software -*- Lisp -*-
-CL_LAUNCH_VERSION='4.0.1'
+CL_LAUNCH_VERSION='4.0.1.1'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -1553,7 +1553,7 @@ t_system () {
   t_args "--system ..."
   t_next "$@" --system clt-asd --source-registry \
   "(:source-registry \
-     (:directory \"${PWD}\") (:tree \"${ASDF_DIR}\") \
+     (:directory \"${PWD}\") (:tree ${ASDF_DIR}) \
      :ignore-inherited-configuration)"
 }
 t_init () {
@@ -1697,8 +1697,7 @@ do_tests () {
   # and exercise your Lisp fasl cache
   for LISP in $LISPS ; do
   case $LISP in
-    gcl) ;; # doesn't support asdf.
-    *) export ASDF_DIR="$(case "$LISP" in xcl) LISP=sbcl ;; esac ; $PROG --lisp "$LISP" --quiet --system asdf --init '(cl-launch::finish-outputs)(format t "~%~A-~A: ~A~%" "SOURCE" "REGISTRY" (asdf:system-source-directory :asdf))' | grep ^SOURCE-REGISTRY: | tail -1 | cut -d' ' -f2- )" ;;
+    *) export ASDF_DIR="$($PROG --lisp "$LISP" --quiet --system asdf --init '(uiop:format! t "~%~:@(~A-~A~): ~S~%" :source :registry (asdf:system-source-directory :asdf))' | grep ^SOURCE-REGISTRY: | tail -1 | cut -d' ' -f2- )" ;;
   esac
   for TEST_SHELL in ${TEST_SHELLS:-${TEST_SHELL:-sh}} ; do
   echo "Using lisp implementation $LISP with test shell $TEST_SHELL"
@@ -1709,14 +1708,12 @@ do_tests () {
     image*:dump*:ecl) ;;
     # we don't know how to dump at all with ABCL, XCL
     *:dump*:abcl|image*:*:abcl|*:dump*:xcl|image*:*:xcl) ;;
-    # *:dump*:ecl|image*:*:ecl) ;;
     *)
   for IF in "noinc" "noinc file" "inc" "inc1 file" "inc2 file" ; do
   TDIF="$TM$TD$IF"
   for TS in "" " system" ; do
   TDIFS="$TDIF$TS"
   case "$TD:$TS:$LISP" in
-    *:" system:gcl") ;; # no ASDF for GCL 2.6
     dump_*:cmucl*|dump_*:gcl*|dump_*:allegro|dump_*:ccl|dump_*:clisp|dump_*:scl)
       : invalid or unsupported combo ;; # actually only available for ecl and sbcl
     *)
