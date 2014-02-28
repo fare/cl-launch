@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper generator for Common Lisp software -*- Lisp -*-
-CL_LAUNCH_VERSION='4.0.0.3'
+CL_LAUNCH_VERSION='4.0.0.4'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -561,8 +561,7 @@ what you want, you may use cl-launch as a script interpret the following way
 For instance, you may write the following script (stripping leading spaces):
   #!/usr/bin/cl --restart cl-user::main
   (defun main ()
-    (uiop:println "Hello, World!")
-    (uiop:writeln uiop:*command-line-arguments*))
+    (format t "Hello, World!~%~S~%" uiop:*command-line-arguments*))
 The options must be quoted as in a shell script.
 Also, using -X as your very first option and -- as your last will ensure that
 the script works even if its name starts with a '(' or a '-', in addition
@@ -889,13 +888,13 @@ process_options () {
       -i|--init)
         add_init_form "$1" ; shift ;;
       -ip|--print)
-        add_init_form "(uiop:println(progn $1))" ; shift ;;
+        add_init_form "(princ(progn $1))(terpri)" ; shift ;;
       -iw|--write)
-        add_init_form "(uiop:writeln(progn $1))" ; shift ;;
+        add_init_form "(write(progn $1))(terpri)" ; shift ;;
       -E|--entry)
         add_init_form "($1 uiop:*command-line-arguments*)" ; shift ;;
       "("*)
-	add_init_form "(uiop:println(progn $x))" ;;
+	add_init_form "(princ(progn $x))(terpri)" ;;
       -p|-pc|+p)
         ABORT "option $x is not supported anymore." \
 		"Use option -S instead." ;;
