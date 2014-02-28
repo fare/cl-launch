@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper generator for Common Lisp software -*- Lisp -*-
-CL_LAUNCH_VERSION='4.0.0.2'
+CL_LAUNCH_VERSION='4.0.0.3'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -122,7 +122,7 @@ Software specification:
  -e FORM	--eval FORM	     evaluate FORM while building
 		--require MODULE     require MODULE while building
  -r FUNC	--restart FUNC       restart from build by funcalling FUNC
-		--entry	FUNC	     (FUNC argv) after restart (buildapp compat.)
+ -E FUNC	--entry	FUNC	     (FUNC argv) after restart (buildapp compat.)
  -i FORM	--init FORM	     evaluate FORM after restart
  -ip FORM	--print FORM	     evaluate and princ FORM after restart
  -iw FORM	--write FORM	     evaluate and write FORM after restart
@@ -892,7 +892,7 @@ process_options () {
         add_init_form "(uiop:println(progn $1))" ; shift ;;
       -iw|--write)
         add_init_form "(uiop:writeln(progn $1))" ; shift ;;
-      --entry)
+      -E|--entry)
         add_init_form "($1 uiop:*command-line-arguments*)" ; shift ;;
       "("*)
 	add_init_form "(uiop:println(progn $x))" ;;
@@ -1494,7 +1494,7 @@ BEGIN_TESTS='(in-package :cl-user)(defvar *f* ())(defvar *err* 0)(defvar *begin*
 (uiop:implementation-identifier)))
 '
 END_TESTS="$(foo_require t begin)"'
-(tst t(if (equal "won" (first uiop::*command-line-arguments*))
+(tst t(if (equal "won" (first uiop:*command-line-arguments*))
 (format t "argument passing worked, ")
 (progn (incf *err*) (format t "argument passing failed (got ~S), " (cl-launch::raw-command-line-arguments))))
 (if (equal "doh" (cl-launch::getenv "DOH"))
@@ -2535,7 +2535,7 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
 #-ecl
 (defun build-and-dump (dump build restart final init quit)
   (build-and-load build restart final init quit)
-  (remove :cl-launched *features*)
+  (setf *features* (remove :cl-launched *features*))
   (dump-image dump :executable (getenvp "CL_LAUNCH_STANDALONE"))
   (quit 0))
 

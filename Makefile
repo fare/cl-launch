@@ -59,11 +59,7 @@ mrproper: clean
 	-rm -rf debian/cl-launch .pc/ build-stamp debian/patches/ debian/debhelper.log # debian crap
 
 debian-package: mrproper
-	git clean -xfd
-	RELEASE="$$(git tag -l '[4-.9].[0-9].[0-9]' | tail -n 1)" ; \
-	git-buildpackage --git-debian-branch=master --git-upstream-branch=master --git-upstream-tag=$$RELEASE --git-tag --git-retag --git-ignore-branch
-	lintian -c --fail-on-warnings ../cl-launch_*.changes
-	git clean -xfd
+	./release.lisp debian-package
 
 # This fits my own system. YMMV. Try make install for a more traditional install
 reinstall:
@@ -71,6 +67,7 @@ reinstall:
 
 # This might fit your system, installing from same directory
 reinstall_here:
+	-git clean -xfd
 	make install_source install_binary_standalone INSTALL_SOURCE=$$PWD INSTALL_BIN=$$PWD
 
 test:
@@ -91,25 +88,7 @@ push:
 	git fetch
 	git status
 
-debian-package-all: debian-package
-	./cl-launch.sh --include . -B install_path
-	./cl-launch.sh --no-include -o cl-launch -B install_bin
-	VER=$$(git describe --tags --match '4.*') ; \
-	cd .. && \
-	  tar zcf ~/files/cl-launch/cl-launch-$${VER}.tar.gz --exclude .git cl-launch && \
-	  cp cl-launch/cl-launch.sh ~/files/cl-launch/cl-launch.sh && \
-	  mv cl-launch_$${VER}* ~/files/cl-launch/ && \
-	cd ~/files/cl-launch && \
-	  ln -sf cl-launch-$${VER}.tar.gz cl-launch.tar.gz && \
-	  gpg -b -a cl-launch-$${VER}.tar.gz && \
-	  ln -sf cl-launch-$${VER}.tar.gz cl-launch.tar.gz && \
-	  ln -sf cl-launch-$${VER}.tar.gz.asc cl-launch.tar.gz.asc && \
-	  dput mentors cl-launch_$${VER}-1_amd64.changes
-	rsync -av --delete ~/files/cl-launch/ common-lisp.net:/project/xcvb/public_html/cl-launch/
+debian-package-all:
 
 quickrelease: reinstall_here
-	VER=`./cl-launch.sh --version | ( read a b ; echo $$b )` ; \
-	cd .. && \
-	tar zcf cl-launch-$${VER}.tar.gz --exclude .git cl-launch && \
-	rsync -av cl-launch/cl-launch.sh cl-launch-$${VER}.tar.gz common-lisp.net:/project/xcvb/public_html/cl-launch/ && \
-	ssh common-lisp.net ln -sf cl-launch-$${VER}.tar.gz /project/xcvb/public_html/cl-launch/cl-launch.tar.gz
+	./release.lisp quickrelease
