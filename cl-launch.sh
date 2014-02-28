@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper generator for Common Lisp software -*- Lisp -*-
-CL_LAUNCH_VERSION='4.0.0.4'
+CL_LAUNCH_VERSION='4.0.0.5'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -1553,7 +1553,7 @@ t_system () {
   t_args "--system ..."
   t_next "$@" --system clt-asd --source-registry \
   "(:source-registry \
-     (:directory \"${PWD}\") (:directory \"${ASDF_DIR}\") \
+     (:directory \"${PWD}\") (:tree \"${ASDF_DIR}\") \
      :ignore-inherited-configuration)"
 }
 t_init () {
@@ -2347,7 +2347,8 @@ NIL
 (unless (member :asdf3 *features*)
   (flet ((maybe-register (d)
            (when (probe-file (merge-pathnames "asdf.asd" d))
-             (pushnew d *central-registry*))))
+             (pushnew d *central-registry*)
+             (pushnew (merge-pathnames "uiop/" d) *central-registry*))))
     (or (let ((asdf (find-system "asdf" nil)))
           (and asdf #+asdf2 (version-satisfies asdf "3.0.1")))
         (maybe-register (merge-pathnames "cl/asdf/" (user-homedir-pathname)))
