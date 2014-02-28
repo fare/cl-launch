@@ -50,13 +50,9 @@ install_binary_with_include:
 		--output ${INSTALL_BIN}/cl-launch -B install_bin > /dev/null
 
 clean:
-	-rm -f *.*fasl *.*fsl *.fas *.lib *.x86f *.amd64f *.o
-	-rm -f build.xcvb cl-launch cl-launch.asd launcher.lisp wrapper.sh
-	-rm -f clt.image clt-out.sh.orig clt-preimage.lisp clt-sys.lisp clt.log clt.preimage clt-preimage.sh clt-asd.asd clt-out.sh clt-preimage.fasl clt-src.lisp tests.log
-	-cd debian ; rm -f cl-launch.debhelper.log cl-launch.postinst.debhelper cl-launch.prerm.debhelper cl-launch.substvars files
+	git clean -xfd
 
 mrproper: clean
-	-rm -rf debian/cl-launch .pc/ build-stamp debian/patches/ debian/debhelper.log # debian crap
 
 debian-package: mrproper
 	./release.lisp debian-package
