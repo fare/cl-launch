@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper generator for Common Lisp software -*- Lisp -*-
-CL_LAUNCH_VERSION='4.0.1.1'
+CL_LAUNCH_VERSION='4.0.1.2'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -2242,7 +2242,7 @@ invoke_image () {
   fi
   PACKAGE_FORM=
   HASH_BANG_FORM=
-  LAUNCH_FORMS="(asdf/image:restore-image)"
+  LAUNCH_FORMS="(uiop:restore-image)"
   "$EXEC_LISP" "$@"
 }
 
@@ -2541,23 +2541,24 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
 (progn
   (defvar *in-compile* nil)
   (defvar *dependency-counter* 0)
+  (defun make-temporary-system (name options)
+    (let* ((sys (pathname-name (temporary-filename name)))
+           (asd (temporary-file-from-sexp `(defsystem ,sys ,@options) (strcat name ".asd"))))
+      (asdf/find-system:load-asd asd :name sys)
+      sys))
   (defun make-dependency (fun arg)
     (ecase fun
       ((load)
        (let* ((load-file (ensure-lisp-file arg "load.lisp"))
               (dep-name (format nil "build-~D" *dependency-counter*))
-              (dep-sys (pathname-name (temporary-filename dep-name)))
               (prev-dep-name (when (plusp *dependency-counter*)
                                (format nil "build-~D" (1- *dependency-counter*))))
-              (prev-dep-sys (when prev-dep-name (pathname-name (temporary-filename prev-dep-name))))
-              (dep-def `(defsystem ,dep-sys
-                          :depends-on ,(ensure-list prev-dep-sys)
-                          :components ((:file ,(pathname-name load-file)
-                                        :pathname ,(truename load-file)))))
-              (dep-asd (temporary-file-from-sexp dep-def dep-name)))
+              (prev-dep-sys (when prev-dep-name (pathname-name (temporary-filename prev-dep-name)))))
          (incf *dependency-counter*)
-         (asdf/find-system:load-asd dep-asd :name dep-sys)
-         dep-sys))
+         (make-temporary-system
+	  dep-name `(:depends-on ,(ensure-list prev-dep-sys)
+		     :components ((:file ,(pathname-name load-file)
+				   :pathname ,(truename load-file)))))))
       ((:eval-input)
        (with-input (i arg)
          (make-dependency 'load i)))
@@ -2574,36 +2575,32 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
                 (*features* (remove :cl-launch *features*))
                 (header (or *compile-file-pathname* *load-pathname* (getenvp "CL_LAUNCH_HEADER")))
                 (header-file (ensure-lisp-file header "header.lisp"))
-                (standalone (getenvp "CL_LAUNCH_STANDALONE"))
-                (init-code
+                (standalone (and (getenvp "CL_LAUNCH_STANDALONE") t))
+                (footer
                   `(progn
-                     (unless *in-compile*
+		     (defun epilogue ()
                        (setf
                         *package* (find-package :cl-user)
-                        *load-verbose* nil
-                        *dumped* ,(if standalone :standalone :wrapped)
-                        *command-line-arguments* nil
-                        ;;,(symbol* :asdf :*source-registry*) nil
-                        ;;,(symbol* :asdf :*output-translations*) nil
-                        ,@(when restart `(*restart* (read-function ,restart)))
-                        *init-forms* ,init)
-                       ,@(unless quit `(*quit* nil)))
-                     ,(if standalone '(asdf/image:restore-image) '(si::top-level))))
-                (final-file (temporary-file-from-string final "final.lisp"))
-                (init-file (temporary-file-from-sexp init-code "init.lisp"))
-                (dependencies (loop :for (fun arg) :in `((load ,header-file) ,@build)
+                        *image-dumped-p* ,standalone
+                        *image-entry-point* ,(when restart `(ensure-function ,restart))
+                        *image-prelude* ,(unsafify init)
+                        *image-postlude* ,(unsafify final)
+                        *lisp-interaction* ,(not quit))
+		       ,(if standalone
+			    '(shell-boolean-exit (restore-image))
+			    '(progn (si::top-level t) (quit))))
+		     (unless *in-compile* (epilogue))))
+		(footer-file (temporary-file-from-sexp footer "footer.lisp"))
+                (dependencies (loop :for (fun arg) :in `((load ,header-file) ,@build (load ,footer-file))
                                     :collect (make-dependency fun arg)))
-                (program-sys (pathname-name (temporary-filename "program")))
-                (program-sysdef
-                  `(defsystem ,program-sys
-                    :serial t
-                    :depends-on ,dependencies
-                    :components ((:file "final" :pathname ,(truename final-file))
-                                 (:file "init" :pathname ,(truename init-file)))))
-                (program-asd (temporary-file-from-sexp program-sysdef "program.asd")))
-           (asdf/find-system:load-asd program-asd)
-           (operate 'program-op program-sys)
-           (rename-file-overwriting-target (output-file 'program-op program-sys) dump))
+                (program-sys
+		  (make-temporary-system
+		   "program"
+		   `(:serial t
+		     :build-operation program-op
+		     :build-pathname ,(pathname dump)
+		     :depends-on ,dependencies))))
+           (operate 'program-op program-sys))
       (cleanup-temporary-files))
     (quit)))
 
