@@ -19,4 +19,3 @@ debian/cl-launch.substvars
 debian/cl-launch/
 debian/files
 .pc/
-debian/

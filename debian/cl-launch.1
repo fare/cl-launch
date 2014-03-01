@@ -1,5 +1,5 @@
 .\" Hey, Emacs!  This is an -*- nroff -*- source file.
-.TH CL-LAUNCH 1 "May 14th, 2012"
+.TH CL-LAUNCH 1 "Marc 1st, 2014"
 .SH NAME
 CL-Launch \- Common Lisp program launcher and shell script generator
 .SH DESCRIPTION
@@ -11,10 +11,9 @@ independently from the underlying Common Lisp implementation.
 Currently supported implementations are:
 SBCL, Clozure CL, GNU CLISP, CMUCL, ECL, ABCL, XCL, SCL, Allegro, LispWorks Pro, GCL.
 .PP
-You can specify complex Lisp systems using ASDF 2.
-cl-launch will leverage ASDF 2's per-user, per-implementation fasl cache.
+You can specify complex Lisp systems using ASDF 3.
+cl-launch will leverage ASDF 3's per-user, per-implementation fasl cache.
 It can dump precompiled images and resume from them, for fast software startup.
-It also integrates well with XCVB.
 .PP
 cl-launch contains its own complete documentation.
 You can view it all using the following command:

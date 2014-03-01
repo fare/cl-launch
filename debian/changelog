@@ -1,3 +1,10 @@
+cl-launch (4.0.2-1) unstable; urgency=low
+
+  * Fixes for ECL, LispWorks.
+  * Tests moved aside, which reduces script size by over 10%.
+
+ -- Francois-Rene Rideau <fare@tunes.org>  Sat, 01 Mar 2014 14:00:55 -0500
+
 cl-launch (4.0.1.1-3) unstable; urgency=low
 
   * Speed up startup time by not upgrading ASDF unless needed.

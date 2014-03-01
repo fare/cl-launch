@@ -39,4 +39,3 @@ Description: uniform frontend to running Common Lisp code from the shell
  forms or scripts from the command-line without invoking a full-fledged REPL,
  and to easily compare results between implementations.
  .
-Homepage: http://www.cliki.net/cl-launch

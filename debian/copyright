@@ -8,14 +8,14 @@ Debian Maintainer: Francois-Rene Rideau <fare@tunes.org>
 
 Upstream Copyright Statement
 ============================
-CL-Launch is written and Copyright (c) 2005-2012 by Francois-Rene Rideau.
+CL-Launch is written and Copyright (c) 2005-2014 by Francois-Rene Rideau.
 
 CL-Launch is available under the terms of the bugroff license.
 	http://www.geocities.com/SoHo/Cafe/5947/bugroff.html
 You may at your leisure use the LLGPL instead < http://www.cliki.net/LLGPL >
 
 The LLGPL, or Lisp Lesser GNU Public, consists of a preamble (see below)
-and the Lesser GNU Public License 2.1 (LGPL-2.1).
+and the GNU Lesser General Public License 2.1 (LGPL-2.1).
 Where these conflict, the preamble takes precedence.
 CL-Launch is referenced in the preamble as the "LIBRARY."
 The LGPL-2.1 is stored on a Debian system in the file
