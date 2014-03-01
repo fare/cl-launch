@@ -19,7 +19,3 @@ TODO for cl-launch as of 4.0.1.1
    in cl-launch, but will hopefully support it in XCVB that can do the
    bookkeeping on its side.
 
-* Move the tests to a separate file?
-   Since cl-launch is now maintained as a git repository
-   rather than as a standalone file,
-   we don't need load the script with test stuff anymore.
