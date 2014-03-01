@@ -9,22 +9,22 @@ t_env () {
 [ -n "$BEGIN_TESTS" ] && return
 export DOH=doh
 TCURR=
-BEGIN_TESTS='(in-package :cl-user)(defvar *f* ())(defvar *err* 0)(defvar *begin* 0)(defvar *n*)
+BEGIN_TESTS='(in-package :cl-user)
 ;;(eval-when (:compile-toplevel) (format *trace-output* "~&Prologue compiled~%"))
 ;;(eval-when (:load-toplevel) (format *trace-output* "~&Prologue loaded~%"))
 ;;(eval-when (:execute) (format *trace-output* "~&Prologue executed~%"))
-(defmacro tst (x &body body) `(progn (defvar *f* ()) (defparameter *n* ,x) (push (quote(progn ,@body)) *f*)))
-
+(defmacro tst (x &body body) `(eval-when (:compile-toplevel :load-toplevel :execute)(handler-bind ((warning (function muffle-warning))) (eval (quote (progn (defvar *f* ()) (defparameter *n* ,x) (push (quote(progn ,@body)) *f*)))))))
+(defparameter *f* ())(defvar *n*)
 (defun tt () (dolist (x (reverse *f*)) (eval x)))
-(tst()(format t "Hello, world, ~A speaking.~%"
-(uiop:implementation-identifier)))
+(tst`:begin-tests(defvar *err* 0)(defvar *begin* 0)
+(format t "Hello, world, ~A speaking.~%" (uiop:implementation-identifier)))
 '
 END_TESTS="$(foo_require t begin)"'
 (tst t(if (equal "won" (first uiop:*command-line-arguments*))
 (format t "argument passing worked, ")
-(progn (incf *err*) (format t "argument passing failed (got ~S), " (cl-launch::raw-command-line-arguments))))
-(if (equal "doh" (cl-launch::getenv "DOH"))
-(format t "getenv worked, ")
+(progn (incf *err*) (format t "argument passing failed,~%*c-l-a* = ~S~%r-c-l-a = ~S~%c-l-a = ~S~%"
+uiop:*command-line-arguments* (uiop:raw-command-line-arguments) (uiop:command-line-arguments))))
+(if (equal "doh" (cl-launch::getenv "DOH")) (format t "getenv worked, ")
 (progn (incf *err*) (format t "getenv failed, ")))
 (if (zerop *err*) (format t "all tests ~a~a.~%" :o :k) (format t "~a ~a.~%" :error :detected)))'
 case "$LISP" in

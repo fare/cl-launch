@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper generator for Common Lisp software -*- Lisp -*-
-CL_LAUNCH_VERSION='4.0.1.3'
+CL_LAUNCH_VERSION='4.0.1.4'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -1573,7 +1573,7 @@ print_shell_wrapper_body () {
   cat <<'EOF'
 DO_LISP=do_exec_lisp
 HASH_BANG_FORM='(set-dispatch-macro-character #\# #\! (lambda(stream char arg)(declare(ignore char arg))(values(read-line stream))))'
-PACKAGE_FORM=" #.(progn(defpackage :uiop (:use :cl))())"
+PACKAGE_FORM="#.(progn(defpackage :uiop (:use :cl))())#.(progn(declaim (special uiop::*command-line-arguments*))())"
 MAYBE_PACKAGE_FORM=
 PROGN="(progn"
 NGORP=")"
@@ -1815,8 +1815,8 @@ prepare_arg_form () {
   for arg ; do
     F="$F\"$(kwote "$arg")\""
   done
-  MAYBE_PACKAGE_FORM="$PACKAGE_FORM"
-  LAUNCH_FORMS="(defparameter uiop::*command-line-arguments*'($F))${LAUNCH_FORMS}"
+  MAYBE_PACKAGE_FORM=" $PACKAGE_FORM"
+  LAUNCH_FORMS="(setf uiop::*command-line-arguments*'($F))${LAUNCH_FORMS}"
 }
 # Aliases
 implementation_alisp () {
