@@ -1,12 +1,12 @@
-TODO for cl-launch as of 2.31
+TODO for cl-launch as of 4.0.1.1
 
- * When resuming from an image then dumping another, the INCLUDE_PATH
+* When resuming from an image then dumping another, the INCLUDE_PATH
    becomes a very bad variable to look for the image.
    Include a test case and fix it.
    More generally, test with directory differences between image and
    other stuff.
 
- * Maybe: add "dump from previous image" support for ECL?
+* Maybe: add "dump from previous image" support for ECL?
    One limitation that cl-launch has on ECL (vs on e.g. SBCL)
    is the inability to "dump an image from a previous image".
    This could be achieved by hacking asdf:make-build
@@ -18,3 +18,8 @@ TODO for cl-launch as of 2.31
    deleted by then. I do not currently intend to support this feature
    in cl-launch, but will hopefully support it in XCVB that can do the
    bookkeeping on its side.
+
+* Move the tests to a separate file?
+   Since cl-launch is now maintained as a git repository
+   rather than as a standalone file,
+   we don't need load the script with test stuff anymore.
