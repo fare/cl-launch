@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper generator for Common Lisp software -*- Lisp -*-
-CL_LAUNCH_VERSION='4.0.1.4'
+CL_LAUNCH_VERSION='4.0.1.5'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -1573,7 +1573,7 @@ print_shell_wrapper_body () {
   cat <<'EOF'
 DO_LISP=do_exec_lisp
 HASH_BANG_FORM='(set-dispatch-macro-character #\# #\! (lambda(stream char arg)(declare(ignore char arg))(values(read-line stream))))'
-PACKAGE_FORM="#.(progn(defpackage :uiop (:use :cl))())#.(progn(declaim (special uiop::*command-line-arguments*))())"
+PACKAGE_FORM="#.(progn(defpackage :uiop/image (:use :cl))())#.(progn(declaim (special uiop/image::*command-line-arguments*))())"
 MAYBE_PACKAGE_FORM=
 PROGN="(progn"
 NGORP=")"
@@ -1816,7 +1816,7 @@ prepare_arg_form () {
     F="$F\"$(kwote "$arg")\""
   done
   MAYBE_PACKAGE_FORM=" $PACKAGE_FORM"
-  LAUNCH_FORMS="(setf uiop::*command-line-arguments*'($F))${LAUNCH_FORMS}"
+  LAUNCH_FORMS="(setf uiop/image::*command-line-arguments*'($F))${LAUNCH_FORMS}"
 }
 # Aliases
 implementation_alisp () {
@@ -2254,22 +2254,19 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
            (asd (temporary-file-from-sexp `(defsystem ,sys ,@options) (strcat name ".asd"))))
       (asdf/find-system:load-asd asd :name sys)
       sys))
-  (defun make-dependency (fun arg)
+  (defun make-dependency (fun arg previous)
     (ecase fun
       ((load)
        (let* ((load-file (ensure-lisp-file arg "load.lisp"))
-              (dep-name (format nil "build-~D" *dependency-counter*))
-              (prev-dep-name (when (plusp *dependency-counter*)
-                               (format nil "build-~D" (1- *dependency-counter*))))
-              (prev-dep-sys (when prev-dep-name (pathname-name (temporary-filename prev-dep-name)))))
+              (dep-name (format nil "build-~D" *dependency-counter*)))
          (incf *dependency-counter*)
          (make-temporary-system
-	  dep-name `(:depends-on ,(ensure-list prev-dep-sys)
+	  dep-name `(:depends-on ,previous
 		     :components ((:file ,(pathname-name load-file)
 				   :pathname ,(truename load-file)))))))
       ((:eval-input)
        (with-input (i arg)
-         (make-dependency 'load i)))
+         (make-dependency 'load i previous)))
       ((:require)
        `(:require ,arg))
       ((:load-system)
@@ -2299,8 +2296,12 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
 			    '(progn (si::top-level t) (quit))))
 		     (unless *in-compile* (epilogue))))
 		(footer-file (temporary-file-from-sexp footer "footer.lisp"))
-                (dependencies (loop :for (fun arg) :in `((load ,header-file) ,@build (load ,footer-file))
-                                    :collect (make-dependency fun arg)))
+                (dependencies
+                  (loop :with r = ()
+                        :for (fun arg) :in `((load ,header-file) ,@build (load ,footer-file))
+                        :for dep = (make-dependency fun arg r)
+                        :do (setf r (append r (list dep)))
+                        :finally (return r)))
                 (program-sys
 		  (make-temporary-system
 		   "program"
