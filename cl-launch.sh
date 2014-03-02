@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper generator for Common Lisp software -*- Lisp -*-
-CL_LAUNCH_VERSION='4.0.1.5'
+CL_LAUNCH_VERSION='4.0.1.6'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -46,13 +46,12 @@ DEFAULT_USE_QUICKLISP=
 
 ### Initialize cl-launch variables
 unset \
-	SOFTWARE_BUILD_FORMS \
-	SOFTWARE_FINAL_FORMS SOFTWARE_INIT_FORMS \
+	SOFTWARE_BUILD_FORMS SOFTWARE_FINAL_FORMS SOFTWARE_INIT_FORMS \
 	SOURCE_REGISTRY INCLUDE_PATH LISPS WRAPPER_CODE \
 	OUTPUT_FILE UPDATE \
 	LINE LINE1 LINE2 NO_QUIT CONTENT_FILE \
         TRIED_CONFIGURATION HAS_CONFIGURATION \
-	EXEC_LISP DO_LISP DUMP LOAD_IMAGE RESTART IMAGE IMAGE_OPT \
+	EXEC_LISP DO_LISP DUMP LOAD_IMAGE RESTART RESTART_PACKAGE IMAGE IMAGE_OPT \
 	EXTRA_CONFIG_VARIABLES \
 	EXECUTABLE_IMAGE STANDALONE_EXECUTABLE CL_LAUNCH_STANDALONE \
         TEST_SHELLS TORIG IMPL
@@ -65,6 +64,10 @@ USE_QUICKLISP="$DEFAULT_USE_QUICKLISP"
 
 UNREAD_DEPTH=0
 OUTPUT_FILE="!"
+PACKAGE=cl-user
+RESTART_PACKAGE=
+INIT_PACKAGE=
+FINAL_PACKAGE=
 
 ### Other constants
 MAGIC_MD5SUM="65bcc57c2179aad145614ec328ce5ba8" # Greenspun's Tenth Rule...
@@ -119,6 +122,8 @@ Software specification:
  -S X		--source-registry X  override source registry of asdf systems
  -s SYSTEM	--system SYSTEM	     load asdf SYSTEM while building
 		--load-system SYSTEM same as above (buildapp compatibility)
+ -p PACKAGE	--package PACKAGE    change current package to PACKAGE
+ -sp SP		--system-package SP  combination of -s SP and -p SP
  -e FORM	--eval FORM	     evaluate FORM while building
 		--require MODULE     require MODULE while building
  -r FUNC	--restart FUNC       restart from build by funcalling FUNC
@@ -189,7 +194,10 @@ In the first phase, the Lisp image is initialized:
 
 In a second phase, your software is built, based on the following options,
 in order of appearance:
-* evaluating one or several FORMS (option -e --eval)
+* evaluating one or several FORMS (option -e --eval) in the current package.
+  The series of forms is evaluated as by LOAD, in a context where the package
+  has been set to the current package as controlled by option -p --package
+  and defaulting to cl-user.
 * compiling a FILE and load the fasl (option -f --file --load)
   If a filename specified with -f --file --load is '-' (without the quotes),
   then the standard input is used. You may thus concatenate several files
@@ -197,7 +205,9 @@ in order of appearance:
   Or you may write Lisp code that loads the files you need in order.
   To use a file named '-', pass the argument './-'.
 * requiring an implementation-provided MODULE (option --require)
-* having ASDF3 compile and load a SYSTEM (option -s --system --load-system)
+* having ASDF3 compile and load a SYSTEM (option -s --system --load-system);
+  option -sp --system-package loads the SYSTEM and
+  also changes the package at runtime, see -p below.
 * optionally having your Lisp DUMP an image to restart from (option -d --dump),
   and just before evaluating one or several FINAL forms (option -F --final).
   See section DUMPING IMAGES.
@@ -225,20 +235,31 @@ at which point it happens when you invoke the executable output file.
   If you want several functions to be called,
   you may DEFUN one that calls them and use it as a restart,
   or you may use multiple init forms below.
+  The restart may be a function name or expression, that is read from the
+  current PACKAGE as controled by option -p --package with default cl-user.
 * a series of FORMS specified via options -i --init, -ip --print, -iw --write,
- and --entry are evaluated, in order of appearance. Arguments that start with
- an open parenthesis are assumed to be FORMS that follow an implicit --print.
- These FORMS are read and evaluated sequentially as top-level forms, as loaded
- from a string stream after the rest of the software has been loaded.
- Loading from a stream means you don't have to worry about packages and other
- nasty read-time issues; however it also means that if you care a lot about
- the very last drop of startup delay when invoking a dumped image,
- you'll be using option --restart only and avoiding --init.
- Option --print (or -ip) specifies FORMS where the result of the last form
- is to be printed as if by PRINC, followed by a newline.
- Option --write (or -iw) is similar to --print, using WRITE instead of PRINC.
- Option --entry specifies a function to be funcalled with
- uiop:*command-line-arguments* as its single argument.
+  -E --entry, -p --package and -sp --system-package are evaluated,
+  in order of appearance. Arguments that start with an open parenthesis
+  are assumed to be FORMS that follow an implicit --print.
+  These FORMS are read and evaluated sequentially as top-level forms, as loaded
+  from a string stream after the rest of the software has been loaded.
+  Loading from a stream means you don't have to worry about packages and other
+  nasty read-time issues; however it also means that if you care a lot about
+  the very last drop of startup delay when invoking a dumped image,
+  you'll be using option --restart only and avoiding --init.
+  Option -ip --print specifies FORMS where the result of the last form
+  is to be printed as if by PRINC, followed by a newline.
+  Option -iw --write is similar to --print, using WRITE instead of PRINC.
+  Option -E --entry specifies a function to be funcalled with
+  uiop:*command-line-arguments* as its single argument.
+  Option -p --package or -sp --system-package specifies the name of a package
+  in which the subsequent init and final forms will be read; the name
+  will be read as a symbol, and upcased (or not) by your implementation;
+  you will surely lose if you use special characters.
+  (option -sp --system-package also loads a same named system, as above).
+  Also, regarding packages, cl-launch will try to minimize the number of
+  in-package forms based on the assumption that you don't introduce forms
+  that change package yourself. If you do, you're on your own.
 
 General note on cl-launch invocation: options are processed from left to right;
 usually, repeated options accumulate their effects, with the earlier instances
@@ -876,9 +897,9 @@ process_options () {
       -q|--quiet)
         unset CL_LAUNCH_VERBOSE ;;
       -e|--eval)
-	add_build_form "(:eval-input \"$(kwote "$1")\")" ; shift ;;
+	add_build_form "(:eval-input \"(in-package :$PACKAGE)$(kwote "$1")\")" ; shift ;;
       -f|--file|--load)
-	add_build_form "$(load_form "$1")" ; shift ;;
+	add_build_form "(:load \"$(kwote "$1")\" :$PACKAGE)" ; shift ;;
       -s|--system|--load-system)
 	add_build_form "(:load-system \"$1\")" ; shift ;;
       --require)
@@ -893,6 +914,11 @@ process_options () {
         add_init_form "(write(progn $1))(terpri)" ; shift ;;
       -E|--entry)
         add_init_form "($1 uiop:*command-line-arguments*)" ; shift ;;
+      -p|--package)
+        set_package "$1" ; shift ;;
+      -sp|--system-package)
+	add_build_form "(:load-system \"$1\")"
+        set_package "$1" ; shift ;;
       "("*)
 	add_init_form "(princ(progn $x))(terpri)" ;;
       -p|-pc|+p)
@@ -934,7 +960,7 @@ process_options () {
       -d|--dump)
 	DUMP="$1" ; shift ;;
       -r|--restart)
-	RESTART="$1" ; shift ;;
+	RESTART="$1" RESTART_PACKAGE="$PACKAGE" ; shift ;;
       -B|--backdoor)
 	"$@" ; exit ;;
       --)
@@ -976,17 +1002,32 @@ process_options () {
     esac
   done
 }
+set_package () {
+  PACKAGE="$1"
+}
 add_build_form () {
         SOFTWARE_BUILD_FORMS="$SOFTWARE_BUILD_FORMS${SOFTWARE_BUILD_FORMS+
 }$1"
 }
 add_init_form () {
+  if ! [ "${INIT_PACKAGE}" = "$PACKAGE" ] ; then
+    package_form="(in-package :$PACKAGE)"
+    INIT_PACKAGE="$PACKAGE"
+  else
+    package_form=""
+  fi
         SOFTWARE_INIT_FORMS="$SOFTWARE_INIT_FORMS${SOFTWARE_INIT_FORMS+
-}$1"
+}${package_form}$1"
 }
 add_final_form () {
+  if ! [ "${FINAL_PACKAGE}" = "$PACKAGE" ] ; then
+    package_form="(in-package :$PACKAGE)"
+    FINAL_PACKAGE="$PACKAGE"
+  else
+    package_form=""
+  fi
         SOFTWARE_FINAL_FORMS="$SOFTWARE_FINAL_FORMS${SOFTWARE_FINAL_FORMS+
-}$1"
+}${package_form}$1"
 }
 if [ -n "$BASH_VERSION$ZSH_VERSION" ] ; then
   stringbefore () { ECHOn "${2:0:$1}" ;}
@@ -1127,7 +1168,7 @@ print_lisp_launch () {
     ECHOn " :dump \"$(kwote "${DUMP}")\""
   fi
   if [ -n "${RESTART}" ] ; then
-    ECHOn " :restart \"$(kwote "${RESTART}")\""
+    ECHOn " :restart '(\"$(kwote "${RESTART}")\" . :${RESTART_PACKAGE})"
   fi
   ECHOn ")"
 }
@@ -2212,25 +2253,23 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
 
 (asdf::register-preloaded-system "cl-launch")
 
-(defun unsafify (lude)
-  (strcat "(in-package :cl-user) " lude))
-
 (defun build-and-load (build restart final init quit)
   (dolist (x build)
     (ecase (first x)
       ((:eval-input :load-system require)
        (symbol-call :asdf (first x) (second x)))
-      ((load)
-       (etypecase (second x)
-         (null nil)
-         ((eql t) (load* nil))
-         (stream (load* (second x)))
-         ((eql :self) (load-file *cl-launch-file*))
-         ((or pathname string) (load-file (second x)))))))
+      ((:load)
+       (let ((*package* (find-package (third x))))
+         (etypecase (second x)
+           (null nil)
+           ((eql t) (load* nil))
+           (stream (load* (second x)))
+           ((eql :self) (load-file *cl-launch-file*))
+           ((or pathname string) (load-file (second x))))))))
   (when final
-    (eval-input (unsafify final)))
-  (setf *image-prelude* (unsafify init)
-        *image-entry-point* (when restart (ensure-function restart))
+    (eval-input final))
+  (setf *image-prelude* init
+        *image-entry-point* (when restart (ensure-function (car restart) :package (cdr restart)))
         *lisp-interaction* (not quit)))
 
 (defun build-and-run (build restart final init quit)
@@ -2254,19 +2293,25 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
            (asd (temporary-file-from-sexp `(defsystem ,sys ,@options) (strcat name ".asd"))))
       (asdf/find-system:load-asd asd :name sys)
       sys))
-  (defun make-dependency (fun arg previous)
+  (defclass asdf::cl-source-file-in-package (cl-source-file)
+    ((package :initarg :package :reader component-package)))
+  (defmethod perform :around ((o compile-op) (c asdf::cl-source-file-in-package))
+    (let ((*package* (find-package (component-package c))))
+      (call-next-method)))
+  (defun make-dependency (fun arg pkg previous)
     (ecase fun
-      ((load)
+      ((:load)
        (let* ((load-file (ensure-lisp-file arg "load.lisp"))
               (dep-name (format nil "build-~D" *dependency-counter*)))
          (incf *dependency-counter*)
          (make-temporary-system
 	  dep-name `(:depends-on ,previous
-		     :components ((:file ,(pathname-name load-file)
+		     :components ((:cl-source-file-in-package ,(pathname-name load-file)
+                                   :package ,pkg
 				   :pathname ,(truename load-file)))))))
       ((:eval-input)
        (with-input (i arg)
-         (make-dependency 'load i previous)))
+         (make-dependency 'load i :cl-user previous)))
       ((:require)
        `(:require ,arg))
       ((:load-system)
@@ -2287,9 +2332,10 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
                        (setf
                         *package* (find-package :cl-user)
                         *image-dumped-p* ,(if standalone :executable t)
-                        *image-entry-point* ,(when restart `(ensure-function ,restart))
-                        *image-prelude* ,(unsafify init)
-                        *image-postlude* ,(unsafify final)
+                        *image-entry-point*
+                        ,(when restart `(ensure-function ,(car restart) :package ,(cdr restart)))
+                        *image-prelude* ,init
+                        *image-postlude* ,final
                         *lisp-interaction* ,(not quit))
 		       ,(if standalone
 			    '(shell-boolean-exit (restore-image))
@@ -2298,8 +2344,9 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
 		(footer-file (temporary-file-from-sexp footer "footer.lisp"))
                 (dependencies
                   (loop :with r = ()
-                        :for (fun arg) :in `((load ,header-file) ,@build (load ,footer-file))
-                        :for dep = (make-dependency fun arg r)
+                        :for (fun arg pkg) :in
+                        `((:load ,header-file :cl-user) ,@build (:load ,footer-file :cl-user))
+                        :for dep = (make-dependency fun arg pkg r)
                         :do (setf r (append r (list dep)))
                         :finally (return r)))
                 (program-sys
