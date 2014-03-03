@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper generator for Common Lisp software -*- Lisp -*-
-CL_LAUNCH_VERSION='4.0.1.6'
+CL_LAUNCH_VERSION='4.0.1.7'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -126,8 +126,8 @@ Software specification:
  -sp SP		--system-package SP  combination of -s SP and -p SP
  -e FORM	--eval FORM	     evaluate FORM while building
 		--require MODULE     require MODULE while building
- -r FUNC	--restart FUNC       restart from build by funcalling FUNC
- -E FUNC	--entry	FUNC	     (FUNC argv) after restart (buildapp compat.)
+ -r FUNC	--restart FUNC       restart from build by calling (FUNC)
+ -E FUNC	--entry	FUNC	     restart from build by calling (FUNC argv)
  -i FORM	--init FORM	     evaluate FORM after restart
  -ip FORM	--print FORM	     evaluate and princ FORM after restart
  -iw FORM	--write FORM	     evaluate and write FORM after restart
@@ -196,18 +196,19 @@ In a second phase, your software is built, based on the following options,
 in order of appearance:
 * evaluating one or several FORMS (option -e --eval) in the current package.
   The series of forms is evaluated as by LOAD, in a context where the package
-  has been set to the current package as controlled by option -p --package
-  and defaulting to cl-user.
+  has been set to the current package (see below explanations on packages).
 * compiling a FILE and load the fasl (option -f --file --load)
   If a filename specified with -f --file --load is '-' (without the quotes),
   then the standard input is used. You may thus concatenate several files
   and feed them to cl-launch through a pipe.
   Or you may write Lisp code that loads the files you need in order.
   To use a file named '-', pass the argument './-'.
+  Files are loaded with *package* bound to the current package (see below).
 * requiring an implementation-provided MODULE (option --require)
-* having ASDF3 compile and load a SYSTEM (option -s --system --load-system);
-  option -sp --system-package loads the SYSTEM and
-  also changes the package at runtime, see -p below.
+* having ASDF3 compile and load a SYSTEM (option -s --system --load-system).
+  Option -sp --system-package loads the SYSTEM like -s --system and also
+  changes the current package like -p --package (see below on packages)
+  also changes the package at runtime, see option -p --package below.
 * optionally having your Lisp DUMP an image to restart from (option -d --dump),
   and just before evaluating one or several FINAL forms (option -F --final).
   See section DUMPING IMAGES.
@@ -223,47 +224,58 @@ The cache is controlled by ASDF's output-translations mechanism.
 See your ASDF manual regarding the configuration of this cache,
 which is typically under ~/.cache/common-lisp/
 
-In a third phase, your software is run. This happens immediately if using
-option -x --execute or calling cl-launch as a Unix interpreter on a script;
-or it can happen later if you use option -o --output in combination with
-or without option -d --dump to dump an image (which gives you faster startup
-and single-file or double-file delivery, at the expense of disk space),
-at which point it happens when you invoke the executable output file.
-* Hooks from ASDF3's UIOP/IMAGE are run.
-* an optional FUNCTION provided option -r --restart is invoked.
-  Only one restart function may be specified with option --restart.
-  If you want several functions to be called,
-  you may DEFUN one that calls them and use it as a restart,
-  or you may use multiple init forms below.
-  The restart may be a function name or expression, that is read from the
-  current PACKAGE as controled by option -p --package with default cl-user.
+In a third phase, your software is run via UIOP:RESTORE-IMAGE. This happens
+immediately if using option -x --execute or calling cl-launch as a Unix
+interpreter on a script; or it can happen later if you use option -o --output
+in combination with or without option -d --dump to dump an image (which gives
+you faster startup and single-file or double-file delivery, at the expense of
+disk space), at which point it happens when you invoke the executable output
+file.
+* Hooks from ASDF3's UIOP:*IMAGE-RESTORE-HOOK* are called (in FIFO order).
 * a series of FORMS specified via options -i --init, -ip --print, -iw --write,
-  -E --entry, -p --package and -sp --system-package are evaluated,
-  in order of appearance. Arguments that start with an open parenthesis
-  are assumed to be FORMS that follow an implicit --print.
-  These FORMS are read and evaluated sequentially as top-level forms, as loaded
-  from a string stream after the rest of the software has been loaded.
-  Loading from a stream means you don't have to worry about packages and other
-  nasty read-time issues; however it also means that if you care a lot about
-  the very last drop of startup delay when invoking a dumped image,
-  you'll be using option --restart only and avoiding --init.
-  Option -ip --print specifies FORMS where the result of the last form
-  is to be printed as if by PRINC, followed by a newline.
+  stored as a text string, are read and evaluated in order of appearance,
+  each in the context of the package that was current at the time it was
+  requested. (Concatenate together with separating whitespace, these forms
+  constitute the UIOP:*IMAGE-PRELUDE* as handled by RESTORE-IMAGE).
+  Arguments that start with an open parenthesis are assumed to be FORMS that
+  follow an implicit --print.
+  Loading from a stream means you don't have to worry about nasty read-time
+  issues; forms will be read by the fully built Lisp image; however it also
+  means that if you care a lot about the very last drop of startup delay when
+  invoking a dumped image, you'll only use option -r --restart or -E --entry
+  and avoid using --init and its variants.
+  Option -ip --print specifies FORMS such that the result of the last form
+  will be printed as if by PRINC, followed by a newline.
   Option -iw --write is similar to --print, using WRITE instead of PRINC.
-  Option -E --entry specifies a function to be funcalled with
-  uiop:*command-line-arguments* as its single argument.
-  Option -p --package or -sp --system-package specifies the name of a package
-  in which the subsequent init and final forms will be read; the name
-  will be read as a symbol, and upcased (or not) by your implementation;
-  you will surely lose if you use special characters.
-  (option -sp --system-package also loads a same named system, as above).
-  Also, regarding packages, cl-launch will try to minimize the number of
-  in-package forms based on the assumption that you don't introduce forms
-  that change package yourself. If you do, you're on your own.
+* An optional FUNCTION provided option -r --restart or -E --entry is invoked.
+  If the function was provided with option -r --restart (compatible with
+  earlier versions of cl-launch), it will be called with no argument. If it was
+  provided with option -E --entry (compatible with buildapp), it will be called
+  with one argument, being the list of arguments passed to the program,
+  not including argv[0], which is available on most implementations via the
+  function uiop:argv0. Using either option, the argument may be a function name
+  or a lambda expression, that is read from the current package (see below
+  option -p --package and -sp --system-patch).
+  Only one restart or entry function may be specified; if multiple are provided,
+  the last one provided overrides previous ones. If you want several functions
+  to be called, you may DEFUN one that calls them and use it as a restart,
+  or you may use multiple init forms as below.
+
+The current package can be controlled by option -p --package and its variant
+-sp --system-package that also behaves like -s --system. All forms passed to
+--eval, --init, --print, --write, --final, --restart, --entry, etc., are read
+in the current package. Files specified with -f --file --load are read in the
+current package. Current means the package specified by the latest option -p
+--package or -sp --system-package preceding the option being processed, or
+cl-user if there was none. Note that multiple -i --init or -F --final forms
+may be evaluated consecutively after a package has been changed, and that
+if one of these form itself modifies the package, or some other syntax control
+mechanism such as the reader, it may adversely affect later forms in the same
+category, but not those in other categories (if reached).
 
 General note on cl-launch invocation: options are processed from left to right;
 usually, repeated options accumulate their effects, with the earlier instances
-taking effect before later instances. In case of conflicting or redundant
+taking effect before latter instances. In case of conflicting or redundant
 options, the latter override the former.
 
 cl-launch defines a package :cl-launch that exports the following symbol:
@@ -461,6 +473,8 @@ To dump an image, make sure you have a license file in your target directory
 create a build script with
        echo '(hcl:save-image "lispworks" :environment nil)' > si.lisp
        lispworks-6-1-0-x86-linux -siteinit - -init - -build si.lisp
+LispWorks also requires that you have ASDF 3.1.0.86 or later;
+make sure you have it installed and configured in your source registry.
 
 Similarly, a mlisp image for allegro can be created as follows:
 	alisp -e '(progn
@@ -912,13 +926,11 @@ process_options () {
         add_init_form "(princ(progn $1))(terpri)" ; shift ;;
       -iw|--write)
         add_init_form "(write(progn $1))(terpri)" ; shift ;;
-      -E|--entry)
-        add_init_form "($1 uiop:*command-line-arguments*)" ; shift ;;
       -p|--package)
-        set_package "$1" ; shift ;;
+        in_package "$1" ; shift ;;
       -sp|--system-package)
 	add_build_form "(:load-system \"$1\")"
-        set_package "$1" ; shift ;;
+        in_package "$1" ; shift ;;
       "("*)
 	add_init_form "(princ(progn $x))(terpri)" ;;
       -p|-pc|+p)
@@ -960,7 +972,9 @@ process_options () {
       -d|--dump)
 	DUMP="$1" ; shift ;;
       -r|--restart)
-	RESTART="$1" RESTART_PACKAGE="$PACKAGE" ; shift ;;
+	set_restart "$1" ; shift ;;
+      -E|--entry)
+	set_restart "(lambda()($1 uiop:*command-line-arguments*))" ; shift ;;
       -B|--backdoor)
 	"$@" ; exit ;;
       --)
@@ -1002,8 +1016,11 @@ process_options () {
     esac
   done
 }
-set_package () {
+in_package () {
   PACKAGE="$1"
+}
+set_restart () {
+  RESTART="$1" RESTART_PACKAGE="$PACKAGE"
 }
 add_build_form () {
         SOFTWARE_BUILD_FORMS="$SOFTWARE_BUILD_FORMS${SOFTWARE_BUILD_FORMS+
