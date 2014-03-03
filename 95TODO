@@ -1,4 +1,4 @@
-TODO for cl-launch as of 4.0.1.1
+TODO for cl-launch as of 4.0.1.6
 
 * When resuming from an image then dumping another, the INCLUDE_PATH
    becomes a very bad variable to look for the image.
@@ -18,4 +18,20 @@ TODO for cl-launch as of 4.0.1.1
    deleted by then. I do not currently intend to support this feature
    in cl-launch, but will hopefully support it in XCVB that can do the
    bookkeeping on its side.
+
+* Add support for the REPL and/or interpreting commands from stdin;
+   it can be called explicitly with --repl
+   or disabled explicitly with --no-repl,
+   but it otherwise provided as the default fallback behavior
+   when neither script nor build or execution command is provided.
+   This brings behavior to par with /bin/sh.
+   For extra brownies, automatically wrap inside rlwrap or some such
+   if at the terminal (or conversely, disable GNU CLISP interactivity
+   when not wanted).
+
+* Convert cl-launch to a pure Lisp program, that can
+   create a shell script for bootstrap purposes?
+   Therefore, /usr/bin/cl can have fast startup,
+   and not have to spawn an external program
+   unless explicitly requested a non-default implementation.
 
