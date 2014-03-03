@@ -13,6 +13,7 @@ BEGIN_TESTS='(in-package :cl-user)
 ;;(eval-when (:compile-toplevel) (format *trace-output* "~&Prologue compiled~%"))
 ;;(eval-when (:load-toplevel) (format *trace-output* "~&Prologue loaded~%"))
 ;;(eval-when (:execute) (format *trace-output* "~&Prologue executed~%"))
+#+gcl (si::use-fast-links nil) ;; enable debugging information.
 (defmacro tst (x &body body) `(eval-when (:compile-toplevel :load-toplevel :execute)(handler-bind ((warning (function muffle-warning))) (eval (quote (progn (defvar *f* ()) (defparameter *n* ,x) (push (quote(progn ,@body)) *f*)))))))
 (defparameter *f* ())(defvar *n*)
 (defun tt () (dolist (x (reverse *f*)) (eval x)))
