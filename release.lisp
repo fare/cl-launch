@@ -1,13 +1,13 @@
 #!/bin/sh
 #| -*- Lisp -*-
 exec "$(dirname $0)/cl-launch.sh" \
-  --system inferior-shell --system optima.ppcre --load "$0" \
-  --init "(in-package :cl-launch-release) (setf *0* (pop *command-line-arguments*))" \
-  --entry cl-launch-release::main \
-  -- "$0" "$@" ; exit
+  --system inferior-shell --system optima.ppcre --file "$0" \
+  --package cl-launch-release --init '(setf *0* (pop *command-line-arguments*))' \
+  --entry main -- "$0" "$@" ; exit
 |#
 (defpackage :cl-launch-release
   (:use :cl :uiop :asdf :inferior-shell :optima :optima.ppcre)
+  ;; Note: the exports are the list of available commands.
   (:export #:rep #:clean
            #:debian-package #:debian-package-all #:quickrelease))
 
