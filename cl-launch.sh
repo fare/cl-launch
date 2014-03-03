@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper generator for Common Lisp software -*- Lisp -*-
-CL_LAUNCH_VERSION='4.0.1.7'
+CL_LAUNCH_VERSION='4.0.1.8'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -54,6 +54,7 @@ unset \
 	EXEC_LISP DO_LISP DUMP LOAD_IMAGE RESTART RESTART_PACKAGE IMAGE IMAGE_OPT \
 	EXTRA_CONFIG_VARIABLES \
 	EXECUTABLE_IMAGE STANDALONE_EXECUTABLE CL_LAUNCH_STANDALONE \
+	CL_LAUNCH_FILE __CL_ARGV0 IS_X_SCRIPT \
         TEST_SHELLS TORIG IMPL
 
 LISPS="$DEFAULT_LISPS"
@@ -204,6 +205,9 @@ in order of appearance:
   Or you may write Lisp code that loads the files you need in order.
   To use a file named '-', pass the argument './-'.
   Files are loaded with *package* bound to the current package (see below).
+* A script file, as specified by -X ... -- or by use of #! or by following
+  options with an immediate filename that does not start with ( or -, counts
+  as if preceded by --package cl-user --load and followed by --execute --
 * requiring an implementation-provided MODULE (option --require)
 * having ASDF3 compile and load a SYSTEM (option -s --system --load-system).
   Option -sp --system-package loads the SYSTEM like -s --system and also
@@ -594,9 +598,9 @@ what you want, you may use cl-launch as a script interpret the following way
 (stripping leading spaces):
   #!/path/to/cl-launch ...options...
 For instance, you may write the following script (stripping leading spaces):
-  #!/usr/bin/cl --restart cl-user::main
-  (defun main ()
-    (format t "Hello, World!~%~S~%" uiop:*command-line-arguments*))
+  #!/usr/bin/cl --entry main
+  (defun main (argv)
+    (format t "Hello, World!~%~S~%" argv))
 The options must be quoted as in a shell script.
 Also, using -X as your very first option and -- as your last will ensure that
 the script works even if its name starts with a '(' or a '-', in addition
@@ -978,6 +982,11 @@ process_options () {
       -B|--backdoor)
 	"$@" ; exit ;;
       --)
+	if [ -n "${IS_X_SCRIPT}" ] ; then
+	  add_build_form "(:load \"$(kwote "$1")\" :cl-user)"
+	  export __CL_ARGV0="$1"
+	  shift
+	fi
         if [ "x${OUTPUT_FILE}" = "x!" ] ; then
           do_it "$@"
 	else
@@ -985,7 +994,7 @@ process_options () {
         fi
 	;;
       -X) OPTION -x
-        OPTION -i "(cl-launch::compile-and-load-file (pop uiop:*command-line-arguments*))"
+	IS_X_SCRIPT=y
         ;;
       -X' '*)
         # DBG "Working around sh script script limitation..."
@@ -1004,14 +1013,17 @@ process_options () {
        -*)
         # Directly handle arguments in a #! script
 	if [ -f "$1" ] ; then
-          OPTS="$(get_hashbang_arguments "$1")"
+	  OPTS="$(get_hashbang_arguments "$1")"
 	  OPTx="$(stringbefore "${#x}" "$OPTS")"
 	  if [ "x$x" = "x$OPTx" ] ; then
-            eval "OPTION $OPTS \"\$@\""
+	    export __CL_ARGV0="$2"
+	    eval "OPTION $OPTS \"\$@\""
           fi
         fi
         DBG "Invalid command line argument '$x'" ; mini_help_abort ;;
        *)
+	unset IS_X_SCRIPT
+	export __CL_ARGV0="$x"
         OPTION --load "$x" --execute -- "$@" ;;
     esac
   done

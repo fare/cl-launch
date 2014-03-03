@@ -1,9 +1,10 @@
 #!/bin/sh
 #| -*- Lisp -*-
 exec "$(dirname $0)/cl-launch.sh" \
-  --system inferior-shell --system optima.ppcre --file "$0" \
-  --package cl-launch-release --init '(setf *0* (pop *command-line-arguments*))' \
-  --entry main -- "$0" "$@" ; exit
+  --system inferior-shell --system optima.ppcre \
+  --package cl-launch-release --entry main -X -- "$0" "$@" ; exit
+
+NB: this script requires ASDF 3.1.0.87 or later, for argv0.
 |#
 (defpackage :cl-launch-release
   (:use :cl :uiop :asdf :inferior-shell :optima :optima.ppcre)
@@ -14,13 +15,11 @@ exec "$(dirname $0)/cl-launch.sh" \
 (in-package :cl-launch-release)
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (defvar *0* "cl-launch/release.lisp")
-
   (flet ((check-system-version (name version)
            (let ((system (find-system name)))
              (unless (version-satisfies system version)
                (die 2 "~A requires ~A at least ~A but only got version ~A"
-                    *0* name version (component-version system))))))
+                    (argv0) name version (component-version system))))))
     (check-system-version "inferior-shell" "2.0.0")))
 
 (defun rep (argument) (eval-input argument)) ;; read-eval-print, no loop.
@@ -99,7 +98,7 @@ exec "$(dirname $0)/cl-launch.sh" \
   (values))
 
 (defun valid-commands ()
-  (sort (while-collecting (c) (do-external-symbols (x) (c x))) #'string<))
+  (sort (while-collecting (c) (do-external-symbols (x :cl-launch-release) (c x))) #'string<))
 
 (defun main (argv)
   (multiple-value-bind (command status)
@@ -107,4 +106,4 @@ exec "$(dirname $0)/cl-launch.sh" \
     (if (eq status :external)
         (format t "~@[~{~S~^ ~}~%~]" (multiple-value-list (apply command (rest argv))))
         (die 2 "~A ~:[requires a command~;doesn't recognize command ~:*~A~].~%Try one of: ~(~{~A~^ ~}~)~%"
-             *0* (first argv) (valid-commands)))))
+             (argv0) (first argv) (valid-commands)))))
