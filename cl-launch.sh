@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper generator for Common Lisp software -*- Lisp -*-
-CL_LAUNCH_VERSION='4.0.2'
+CL_LAUNCH_VERSION='4.0.2.1'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -8,7 +8,7 @@ AUTHOR_NOTE="\
 "
 SHORT_LICENSE="\
 # cl-launch is available under the terms of the bugroff license.
-#	http://www.geocities.com/SoHo/Cafe/5947/bugroff.html
+#	http://tunes.org/legalese/bugroff.html
 # You may at your leisure use the LLGPL instead < http://www.cliki.net/LLGPL >
 "
 WEB_SITE="# For the latest version of cl-launch, see its web page at:
@@ -172,9 +172,11 @@ conventions of both Unix script interpreters and Common Lisp implementations.
 
 A suggested short-hand name for cl-launch is cl (you may create a symlink
 if it isn't included in your operating system's cl-launch package).
-We'd like to homestead the path /usr/bin/cl while we can.
+We'd like to homestead the path /usr/bin/cl while we can, so that
+script authors can reasonably expect a script to work when it starts with:
+	#!/usr/bin/cl
 
-To work properly, cl-launch 4.0 depends on ASDF 3.0 or later, and on
+To work properly, cl-launch 4.0.2 depends on ASDF 3.0.1 or later, and on
 its portability layer UIOP to manage compilation and image life cycle.
 
 The software is specified as the evaluation of code in several phases;
@@ -264,6 +266,11 @@ file.
   the last one provided overrides previous ones. If you want several functions
   to be called, you may DEFUN one that calls them and use it as a restart,
   or you may use multiple init forms as below.
+* If neither restart nor entry function is provided, the program will exit with
+  status 0 (success). If a function was provided, the program will exit after
+  the function returns (if it returns), with status 0 if and only if the
+  primary return value of result is generalized boolean true, and with status 1
+  if this value is NIL. See documentation for UIOP:RESTORE-IMAGE for details.
 
 The current package can be controlled by option -p --package and its variant
 -sp --system-package that also behaves like -s --system. All forms passed to
