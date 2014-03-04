@@ -106,4 +106,5 @@ NB: this script requires ASDF 3.1.0.87 or later, for argv0.
     (if (eq status :external)
         (format t "~@[~{~S~^ ~}~%~]" (multiple-value-list (apply command (rest argv))))
         (die 2 "~A ~:[requires a command~;doesn't recognize command ~:*~A~].~%Try one of: ~(~{~A~^ ~}~)~%"
-             (argv0) (first argv) (valid-commands)))))
+             (argv0) (first argv) (valid-commands))))
+  t) ;; success according to uiop:restore-image.
