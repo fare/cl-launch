@@ -18,6 +18,8 @@ TODO for cl-launch as of 4.0.1.6
    deleted by then. I do not currently intend to support this feature
    in cl-launch, but will hopefully support it in XCVB that can do the
    bookkeeping on its side.
+   NB: as in uiop/lisp-build:compile-file*, use
+     (with-enough-pathname (input-file :defaults *base-build-directory*)
 
 * Add support for the REPL and/or interpreting commands from stdin;
    it can be called explicitly with --repl
@@ -35,4 +37,27 @@ TODO for cl-launch as of 4.0.1.6
    and not have to spawn an external program
    unless explicitly requested a non-default implementation.
 
-* Add support for --dispatched-entry and other options from Xach's buildapp.
+* Support --dispatched-entry as from Xach's buildapp:
+   dispatched-entry would populate a data structure bound to
+   cl-launch::*dispatched-entry* and call a restart function
+   cl-launch::dispatched-restart that uses (argv0) on supported
+   platforms -- error out on unsupported platforms.
+   http://www.xach.com/lisp/buildapp/
+
+* Support these other options from Xach's buildapp:
+   --load-path --asdf-path --asdf-tree --manifest-file --logfile
+
+* Maybe add these SBCL-specific options, too?
+   * --compress-core
+     this one is trivial to add
+   * --dynamic-space-size
+     a lot of implementation have something like that.
+     Abstract it away, or leave it implementation-specific?
+     Can already be done with:
+       --wrap 'SBCL_OPTIONS="--dynamic-space-size 1024"
+   * --sbcl
+     Can already be done with:
+       --wrap 'SBCL="/opt/sbcl/bin/sbcl"
+   * --core-only
+     That's hard to add, not that useful, and may require hacking
+     both uiop and cl-launch to get it right. Lots of pain, no gain.
