@@ -35,3 +35,4 @@ TODO for cl-launch as of 4.0.1.6
    and not have to spawn an external program
    unless explicitly requested a non-default implementation.
 
+* Add support for --dispatched-entry and other options from Xach's buildapp.

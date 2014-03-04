@@ -24,6 +24,11 @@ If instead you want it in ``/usr``, do::
 A list of variables you may want to modify or override is
 at the beginning of the ``Makefile``.
 
+Wherever you install cl-launch, we recommend you have a symlink
+from /usr/bin/cl to wherever you installed cl-launch, so that
+everyone may be able rely on that location for scripts that start with:
+	#!/usr/bin/cl
+
 
 Advanced installation
 ---------------------
@@ -53,8 +58,7 @@ it would also do::
 Configuration
 -------------
 
-Of course you should adjust your ``PATH``,
-your ``asdf:*central-registry*`` and your ``XCVB_PATH``
+Of course you should adjust your ``PATH`` and your ``CL_SOURCE_REGISTRY``
 coherently with where you install cl-launch.
 
 
@@ -78,4 +82,24 @@ Get short help with
 Get long help with
 	cl-launch --more-help | ${PAGER:-less}
 
-See example in XCVB and Exscribe source code.
+Here are three examples:
+
+1- Running code directly from the command line:
+	cl -sp lisp-stripper "(count-lisp-loc \"asdf.lisp\")"
+
+2- Defining a script that counts lines of Lisp code a la wc :
+
+#!/usr/bin/cl -sp lisp-stripper -E main
+(defun main (argv)
+  (if argv
+      (map () 'print-loc-count argv)
+      (print-loc-count *standard-input*)))
+
+3- Comparing how the many implementations evaluate a same form:
+
+for l in sbcl ccl clisp cmucl ecl abcl scl allegro lispworks gcl xcl ; do
+   cl-launch -l $l -i '(format t "'$l': ~S~%" `#5(1 ,@`(2 3)))' \
+   2>&1 | grep "^$l:" # LW, GCL are verbose
+done
+
+More examples in XCVB and Exscribe source code.

@@ -1,8 +1,11 @@
 cl-launch (4.0.2-1) unstable; urgency=low
 
   * Package control via --package and --system-package
+  * --entry is now a variant of --restart, not of --init.
   * Fixes for ECL, LispWorks.
   * Tests moved aside, which reduces script size by over 10%.
+  * ARGV0 support, in conjunction with ASDF 3.1.0.87.
+  * Documentation updated, as well as TODO file.
 
  -- Francois-Rene Rideau <fare@tunes.org>  Sun, 02 Mar 2014 15:46:55 -0500
 
