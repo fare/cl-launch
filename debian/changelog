@@ -1,4 +1,4 @@
-cl-launch (4.0.2.1-1) unstable; urgency=low
+cl-launch (4.0.2.2-1) unstable; urgency=low
 
   * Package control via --package and --system-package
   * --entry is now a variant of --restart, not of --init.
@@ -7,7 +7,7 @@ cl-launch (4.0.2.1-1) unstable; urgency=low
   * ARGV0 support, in conjunction with ASDF 3.1.0.87.
   * Documentation updated, as well as TODO file.
 
- -- Francois-Rene Rideau <fare@tunes.org>  Mon, 03 Mar 2014 19:47:38 -0500
+ -- Francois-Rene Rideau <fare@tunes.org>  Mon, 03 Mar 2014 22:03:38 -0500
 
 cl-launch (4.0.1.1-3) unstable; urgency=low
 
