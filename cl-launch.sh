@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper generator for Common Lisp software -*- Lisp -*-
-CL_LAUNCH_VERSION='4.0.2.2'
+CL_LAUNCH_VERSION='4.0.2.3'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -189,7 +189,7 @@ In the first phase, the Lisp image is initialized:
 * loading ASDF3. The cl-launch header will try to load ASDF 3.0.1 or later.
   If your implementation does not provide it via (require "asdf"),
   you can configure your implementation's ASDF (if any) to find it.
-  Or you can put it in your home, under ~/cl/asdf/ and cl-launch will find it.
+  Or you can put it in your home, under ~/common-lip/asdf/ and cl-launch will find it.
   Or it may be installed in /usr/share/common-lisp/source/cl-asdf/
   in which case cl-launch will also find it.
   Failing any of the above, cl-launch will be unable to proceed.
@@ -2114,7 +2114,7 @@ NIL
   (unless (member :asdf *features*)
     (ignore-errors (funcall 'require "asdf")))
   (unless (member :asdf *features*)
-    (ignore-errors (load (merge-pathnames "cl/asdf/build/asdf.lisp" (user-homedir-pathname)))))
+    (ignore-errors (load (merge-pathnames "common-lisp/asdf/build/asdf.lisp" (user-homedir-pathname)))))
   (unless (member :asdf *features*)
     (ignore-errors (load "/usr/share/common-lisp/source/asdf/build/asdf.lisp")))
   (unless (member :asdf *features*)
@@ -2133,7 +2133,7 @@ NIL
              (pushnew (merge-pathnames "uiop/" d) *central-registry*))))
     (or (let ((asdf (find-system "asdf" nil)))
           (and asdf #+asdf2 (version-satisfies asdf "3.0.1")))
-        (maybe-register (merge-pathnames "cl/asdf/" (user-homedir-pathname)))
+        (maybe-register (merge-pathnames "common-lisp/asdf/" (user-homedir-pathname)))
         (maybe-register "/usr/share/common-lisp/source/asdf/"))))
 
 ;; Make sure we use the latest ASDF available, if not 3.0.1

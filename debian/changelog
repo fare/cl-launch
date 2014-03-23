@@ -1,3 +1,10 @@
+cl-launch (4.0.3-1) unstable; urgency=low
+
+  * ~/common-lisp/ not ~/cl/ is where ASDF 3.1 standardizes
+    the location of per-user CL software.
+
+ -- Francois-Rene Rideau <fare@tunes.org>  Sun, 23 Mar 2014 18:13:21 -0400
+
 cl-launch (4.0.2.2-1) unstable; urgency=low
 
   * Package control via --package and --system-package
