@@ -2,92 +2,116 @@
 #| -*- Lisp -*-
 exec "$(dirname $0)/cl-launch.sh" \
   --system inferior-shell --system optima.ppcre \
-  --package cl-launch-release --entry main -X -- "$0" "$@" ; exit
-
-NB: this script requires ASDF 3.1.0.87 or later, for argv0.
+  -X --package cl-launch-release --entry main -- "$0" "$@" ; exit
 |#
 (defpackage :cl-launch-release
   (:use :cl :uiop :asdf :inferior-shell :optima :optima.ppcre)
   ;; Note: the exports are the list of available commands.
   (:export #:rep #:clean
-           #:debian-package #:debian-package-all #:quickrelease))
+           #:debian-package #:publish-debian-package #:debian-package-all #:quickrelease))
 
 (in-package :cl-launch-release)
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
+  (unless (fboundp 'argv0) (defun argv0 () "release.lisp")) ;; only in ASDF 3.1.2 or later
   (flet ((check-system-version (name version)
            (let ((system (find-system name)))
              (unless (version-satisfies system version)
                (die 2 "~A requires ~A at least ~A but only got version ~A"
                     (argv0) name version (component-version system))))))
-    (check-system-version "inferior-shell" "2.0.0")))
+    (check-system-version "inferior-shell" "2.0.0"))) ;; for default run outputs
 
-(defun rep (argument) (eval-input argument)) ;; read-eval-print, no loop.
+(defvar *cl-launch-directory* ;; interactive users may want to override that.
+  (truenamize
+   (pathname-directory-pathname
+    (ensure-absolute-pathname
+     (or (argv0) *load-pathname* (nil-pathname)) #'getcwd))))
+
+(defun pn (&optional x)
+  (subpathname *cl-launch-directory* x))
+
+(defun rep (argument)
+  ;; read-eval-print, no loop.
+  (eval-input (strcat "(in-package :cl-launch-release) " argument)))
+
+(defun script-version ()
+  (match (read-file-line (pn "cl-launch.sh") :at 2)
+    ((ppcre "^CL_LAUNCH_VERSION='([0-9]+([.][0-9]+)+)'$" version) version)))
 
 (defun debian-version ()
-  (match (read-file-line "debian/changelog" :at 0)
+  (match (read-file-line (pn "debian/changelog") :at 0)
     ((ppcre "^[^(]*\\(([-0-9.]+)\\)" x) x)))
 
 (defun debian-version-tag (&optional (version (debian-version)))
   (first (split-string version :separator "-")))
 
+(defun get-version ()
+  (let ((sv (script-version))
+        (dv (debian-version-tag)))
+    (unless (equal sv dv)
+      (error "version mismatch: cl-launch.sh says ~A whereas the debian/changelog says ~A" sv dv))
+    sv))
+
 (defun debian-arch ()
   "amd64")
 
 (defun git-tag (&optional (pattern "4.*"))
-  (run/ss `(git describe --tags --match ,pattern)))
+  (with-current-directory ((pn))
+    (run/ss `(git describe --tags --match ,pattern))))
 
 (defun clean ()
-  (run '(git clean -xfd))
+  (with-current-directory ((pn))
+    (run '(git clean -xfd)))
   (values))
 
 (defun debian-package ()
-  (clean)
-  (let* ((version (debian-version))
-         (tag (debian-version-tag version))
-         (up (pathname-parent-directory-pathname (getcwd)))
-         (origtarball (subpathname up (strcat "cl-launch_" tag ".orig.tar.gz"))))
-    (delete-file-if-exists origtarball)
-    (run `(git-buildpackage --git-debian-branch=master --git-upstream-branch=master (--git-upstream-tag= ,tag) --git-tag --git-retag --git-ignore-branch) :show t)
-    (run `(lintian -c --fail-on-warnings (../cl-launch_ ,version _ ,(debian-arch) .changes)) :show t))
-  (clean))
+  (let* ((debian-version (debian-version))
+         (version (get-version))
+         (origtarball (pn (strcat "../cl-launch_" version ".orig.tar.gz"))))
+    (with-current-directory ((pn))
+      (run `(pwd) :show t)
+      (clean)
+      (delete-file-if-exists origtarball)
+      (run `(git-buildpackage --git-debian-branch=master --git-upstream-branch=master (--git-upstream-tag= ,version) --git-tag --git-retag --git-ignore-branch) :show t)
+      (run `(lintian -c --fail-on-warnings (../cl-launch_ ,debian-version _ ,(debian-arch) .changes)) :show t)
+      (clean))))
 
-(defun debian-package-all ()
-  (let* ((version (debian-version))
-         (tag (debian-version-tag version))
-         (up (pathname-parent-directory-pathname (getcwd)))
+(defun publish-debian-package ()
+  (let* ((version (get-version))
+         (debian-version (debian-version))
          (home (user-homedir-pathname))
-         (cl-launch-tag (strcat "cl-launch-" tag))
+         (cl-launch-version (strcat "cl-launch-" version))
          (cldir (subpathname home "files/cl-launch/")))
-    (debian-package)
-    (run `(./cl-launch.sh --include "." "-B" install_path) :show t)
-    (run `(./cl-launch.sh --no-include -o cl-launch "-B" install_bin) :show t)
-    (with-current-directory (up)
-      (run `(rm -f ,cl-launch-tag) :show t)
-      (run `(ln -s cl-launch ,cl-launch-tag) :show t)
-      (run `(tar zcfh (,cldir ,cl-launch-tag .tar.gz)
-                  --exclude .git ,cl-launch-tag) :show t)
-      (run `(cp cl-launch/cl-launch.sh (,cldir cl-launch.sh)) :show t)
-      (run (format nil "mv cl-launch_~A* ~A" tag cldir) :show t)
-      (run `(rm -f ,cl-launch-tag) :show t))
+    (with-current-directory ((pn))
+      (run `(pwd) :show t)
+      (run `(./cl-launch.sh --include "." "-B" install_path) :show t)
+      (run `(./cl-launch.sh --no-include -o cl-launch "-B" install_bin) :show t)
+      (run `(cp ./cl-launch.sh (,cldir cl-launch.sh)) :show t))
+    (with-current-directory ((pn "../"))
+      (run `(pwd) :show t)
+      (run `(rm -f ,cl-launch-version) :show t)
+      (run `(ln -s cl-launch ,cl-launch-version) :show t)
+      (run `(tar zcfh (,cldir ,cl-launch-version .tar.gz)
+                 --exclude .git (,cl-launch-version /)) :show t)
+      (run `(mv ,@(directory (merge-pathnames* (strcat "cl-launch_" version "*.*") (pn "../")))
+                ,cldir) :show t)
+      (run `(rm -f ,cl-launch-version) :show t))
     (with-current-directory (cldir)
-      (run `(ln -sf (cl-launch ,tag .tar.gz) cl-launch.tar.gz) :show t)
-      (run/interactive `(gpg -b -a (cl-launch- ,tag .tar.gz)) :show t)
-      (run `(ln -sf (cl-launch- ,tag .tar.gz) cl-launch.tar.gz) :show t)
-      (run `(ln -sf (cl-launch- ,tag .tar.gz.asc) cl-launch.tar.gz.asc) :show t)
-      (run `(dput mentors (cl-launch_ ,version _ ,(debian-arch) .changes)) :show t)
+      (run `(pwd) :show t)
+      (run/interactive `(gpg -b -a (cl-launch- ,version .tar.gz)) :show t)
+      (run `(ln -sf (,cl-launch-version .tar.gz) cl-launch.tar.gz) :show t)
+      (run `(ln -sf (,cl-launch-version .tar.gz.asc) cl-launch.tar.gz.asc) :show t)
+      (run `(dput mentors (cl-launch_ ,debian-version _ ,(debian-arch) .changes)) :show t)
       (run `(rsync -av --delete ,cldir "common-lisp.net:/project/xcvb/public_html/cl-launch/") :show t))
     (values)))
 
-(defun cl-launch-version ()
-  (match (read-file-line "cl-launch.sh" :at 2)
-    ((ppcre "^CL_LAUNCH_VERSION='([0-9]+([.][0-9]+)+)'$" version) version)))
-
 (defun quickrelease ()
-  (let* ((version (cl-launch-version))
+  (let* ((version (script-version)) ;; no need to compare with the debian version
          (link (strcat "cl-launch-" version))
          (tarball (strcat link ".tar.gz")))
-    (with-current-directory ("../")
+    (with-current-directory ((pn "../"))
+      (run `(pwd) :show t)
+      (clean)
       (run `(rm -f ,link))
       (run `(ln -s cl-launch ,link))
       (run `(tar zcfh ,tarball --exclude .git ,link))
@@ -96,6 +120,10 @@ NB: this script requires ASDF 3.1.0.87 or later, for argv0.
       (run `(ssh common-lisp.net ln -sf ,tarball /project/xcvb/public_html/cl-launch/cl-launch.tar.gz))
       (run `(rm -f ,link ,tarball))))
   (values))
+
+(defun debian-package-all ()
+  (debian-package)
+  (publish-debian-package))
 
 (defun valid-commands ()
   (sort (while-collecting (c) (do-external-symbols (x :cl-launch-release) (c x))) #'string<))

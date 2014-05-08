@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper generator for Common Lisp software -*- Lisp -*-
-CL_LAUNCH_VERSION='4.0.2.3'
+CL_LAUNCH_VERSION='4.0.4'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -176,8 +176,8 @@ We'd like to homestead the path /usr/bin/cl while we can, so that
 script authors can reasonably expect a script to work when it starts with:
 	#!/usr/bin/cl
 
-To work properly, cl-launch 4.0.2 depends on ASDF 3.0.1 or later, and on
-its portability layer UIOP to manage compilation and image life cycle.
+To work properly, cl-launch 4.0.4 depends on ASDF 3.0.1 or later, and
+on its portability layer UIOP, to manage compilation and image life cycle.
 
 The software is specified as the evaluation of code in several phases;
 the distinction matters most for creating executable binaries,
@@ -259,9 +259,9 @@ file.
   provided with option -E --entry (compatible with buildapp), it will be called
   with one argument, being the list of arguments passed to the program,
   not including argv[0], which is available on most implementations via the
-  function uiop:argv0. Using either option, the argument may be a function name
-  or a lambda expression, that is read from the current package (see below
-  option -p --package and -sp --system-patch).
+  function uiop:argv0 (available in ASDF 3.1.2 and later). Using either option,
+  the argument may be a function name or a lambda expression, that is read from
+  the current package (see below option -p --package and -sp --system-package).
   Only one restart or entry function may be specified; if multiple are provided,
   the last one provided overrides previous ones. If you want several functions
   to be called, you may DEFUN one that calls them and use it as a restart,
@@ -484,7 +484,7 @@ To dump an image, make sure you have a license file in your target directory
 create a build script with
        echo '(hcl:save-image "lispworks" :environment nil)' > si.lisp
        lispworks-6-1-0-x86-linux -siteinit - -init - -build si.lisp
-LispWorks also requires that you have ASDF 3.1.0.86 or later;
+LispWorks also requires that you have ASDF 3.1.2 or later;
 make sure you have it installed and configured in your source registry.
 
 Similarly, a mlisp image for allegro can be created as follows:
@@ -2107,43 +2107,138 @@ cat<<'NIL'
 NIL
 ":" 't #-cl-launch ;'; cl_fragment<<'NIL'
 (eval-when (:compile-toplevel :load-toplevel :execute)
-(setf *print-readably* nil ; allegro 5.0 notably will bork without this
-      *print-level* nil
-      *load-verbose* nil *compile-verbose* nil *compile-print* nil *load-print* nil)
-(handler-bind ((warning #'muffle-warning))
-  (unless (member :asdf *features*)
-    (ignore-errors (funcall 'require "asdf")))
-  (unless (member :asdf *features*)
-    (ignore-errors (load (merge-pathnames "common-lisp/asdf/build/asdf.lisp" (user-homedir-pathname)))))
-  (unless (member :asdf *features*)
-    (ignore-errors (load "/usr/share/common-lisp/source/asdf/build/asdf.lisp")))
-  (unless (member :asdf *features*)
-    (error "Could not load ASDF.")))
+  ;; Configure the printer
+  (setf *print-readably* nil ; allegro 5.0 may bork without this
+        *print-level* nil)
+  ;; Hush the compiler and loader.
+  (setf *load-verbose* nil *compile-verbose* nil *compile-print* nil *load-print* nil)
+  ;; The code below exemplifies how to try super-hard to load ASDF 3 from standard locations,
+  ;; by trying nice methods first, then increasingly desperate ones.
+  ;; Stage 1 is to load ASDF at all.
+  ;; Stage 2 is to upgrade to whichever ASDF installation the user has configured (if any).
+  ;; Versions older than ASDF 3.1 need to be told about ~/common-lisp/
+  ;; ASDF 1 has no output translation layer, so can be configured to load ASDF 3
+  ;; only if ASDF 3 is in a predictable place under the user's homedir, thus
+  ;; ~/common-lisp/asdf/ or ~/.local/share/common-lisp/source/asdf/ only.
+  (block nil
+    (let ((required-asdf-version  "3.0.1")
+          (verbose *load-verbose*))
+      (labels ((asdf-symbol (name)
+                 (and (find-package :asdf) (find-symbol (string name) :asdf)))
+               (asdf-call (name &rest args)
+                 (apply (asdf-symbol name) args))
+               (asdf-version ()
+                 (when (find-package :asdf)
+                   (or (symbol-value (or (asdf-symbol '*asdf-version*)
+                                         (asdf-symbol '*asdf-revision*)))
+                       "1.0")))
+               (maybe-display (message)
+                 (when (and verbose message) (format t "~&~A~%" message)))
+               (call-maybe-verbosely (message function &rest args)
+                 (cond
+                   (verbose
+                    (maybe-display message)
+                    (apply function args))
+                   (t
+                    #+abcl ;; Bug in ABCL 1.3.0: without this, loading asdf.fasl shows warnings
+                    (let* ((uc (asdf-symbol '*uninteresting-conditions*))
+                           (vars (when uc (list uc)))
+                           (vals (when uc (list (cons 'warning (symbol-value uc))))))
+                      (progv vars vals
+                        (handler-bind ((warning #'muffle-warning))
+                          (apply function args))))
+                    #-abcl
+                    (handler-bind ((warning #'muffle-warning))
+                      (apply function args)))))
+               (try-stage-1 (message function)
+                 (ignore-errors
+                  (call-maybe-verbosely (format nil "Trying to ~A" message) function))
+                 (maybe-done-stage-1))
+               (try-file-stage-1 (explanation pathname)
+                 (try-stage-1 (format nil "load ASDF from ~A" explanation)
+                              #'(lambda () (load pathname))))
+               (subpath (parent &key directory name type)
+                 (merge-pathnames (make-pathname :defaults parent :version nil
+                                                 :directory (cons :relative directory) :name name :type type)
+                                  parent))
+               (build/asdf.lisp (directory)
+                 (subpath directory :directory '("build") :name "asdf" :type "lisp"))
+               (visible-default-user-asdf-directory ()
+                 (subpath (user-homedir-pathname) :directory '("common-lisp" "asdf")))
+               (visible-default-user-asdf-lisp ()
+                 (build/asdf.lisp (visible-default-user-asdf-directory)))
+               (hidden-default-user-asdf-directory ()
+                 (subpath (user-homedir-pathname) :directory '(".local" "share" "common-lisp" "asdf")))
+               (hidden-default-user-asdf-lisp ()
+                 (build/asdf.lisp (hidden-default-user-asdf-directory)))
+               (stage-1 () ;; Try to load ASDF at all, any ASDF.
+                 (try-stage-1
+                  ;; Do nothing if ASDF is already loaded
+                  "use an already loaded ASDF"
+                  (constantly nil))
+                 (try-stage-1
+                  "require ASDF from the implementation"
+                  ;; Most implementations provide ASDF, but while most of them are case-insensitive,
+                  ;; CLISP is case-sensitive, so we need to specify a lowercase string,
+                  ;; and not the keyword :asdf or symbol 'asdf.
+                  ;; Most implementations provide ASDF 3, but some of them only ASDF 2
+                  ;; and antique versions only ASDF 1.
+                  #'(lambda () (funcall 'require "asdf")))
+                 (try-file-stage-1
+                  "asdf/ under the default (visible) CL source directory ~/common-lisp/"
+                  (visible-default-user-asdf-lisp))
+                 (try-file-stage-1
+                  "asdf/ under the default (hidden) CL source directory ~/.local/share/common-lisp/"
+                  (hidden-default-user-asdf-lisp))
+                 #+(or unix linux bsd)
+                 (progn
+                   (try-file-stage-1
+                    "asdf/ under the local system CL source directory /usr/local/share/common-lisp/"
+                    (build/asdf.lisp #p"/usr/local/share/common-lisp/asdf/"))
+                   (try-file-stage-1
+                    "asdf/ under the managed system CL source directory /usr/share/common-lisp/"
+                    (build/asdf.lisp #p"/usr/share/common-lisp/asdf/"))
+                   (try-file-stage-1
+                    "cl-asdf/ under the managed system CL source directory /usr/share/common-lisp/"
+                    (build/asdf.lisp #p"/usr/share/common-lisp/cl-asdf/")))
+                 (error "Could not load ASDF."))
+               (maybe-done-stage-1 ()
+                 ;; If we have ASDF, then go to stage 2: have it upgrade itself.
+                 (when (member :asdf *features*)
+                   (maybe-display (format nil "Found ASDF ~A" (asdf-version)))
+                   (stage-2))) ;; doesn't return.
+               (configure-asdf ()
+                 ;; configure older versions of ASDF, as needed
+                 (cond
+                   ((probe-file (visible-default-user-asdf-lisp))
+                    (unless (member :asdf3.1 *features*)
+                      (maybe-display "Telling this old ASDF about your ~/common-lisp/asdf/")
+                      (pushnew (visible-default-user-asdf-directory)
+                               (symbol-value (asdf-symbol '*central-registry*)))))
+                   ((probe-file (hidden-default-user-asdf-lisp))
+                    (unless (member :asdf2 *features*)
+                      (maybe-display "Telling this antique ASDF about your ~/.local/share/common-lisp/asdf/")
+                      (pushnew (hidden-default-user-asdf-directory)
+                               (symbol-value (asdf-symbol '*central-registry*)))))))
+               (maybe-done-stage-2 ()
+                 (when (ignore-errors (asdf-call 'version-satisfies
+                                                 (asdf-version) required-asdf-version))
+                   (when verbose
+                     (format t "~&Victory! We now have ASDF ~A~%" (asdf-version)))
+                   (return)))
+               (stage-2 ()
+                 ;; We have ASDF, now have it upgrade itself.
+                 (configure-asdf)
+                 (when (asdf-call 'find-system :asdf nil)
+                   (call-maybe-verbosely
+                    "Trying to upgrade ASDF"
+                    (asdf-symbol 'operate) (asdf-symbol 'load-op) :asdf) :verbose nil)
+                 (maybe-done-stage-2)
+                 (error "We could only load ASDF ~A but we need ASDF ~A"
+                        (asdf-version) required-asdf-version)))
+        (call-maybe-verbosely nil #'stage-1))))
 
-(in-package :asdf))
-NIL
-":" 't #-cl-launch ;'; cl_fragment<<'NIL'
-(eval-when (:compile-toplevel :load-toplevel :execute)
-
-;; In case we only have ASDF1 or ASDF2 so far, try harder.
-(unless (member :asdf3 *features*)
-  (flet ((maybe-register (d)
-           (when (probe-file (merge-pathnames "asdf.asd" d))
-             (pushnew d *central-registry*)
-             (pushnew (merge-pathnames "uiop/" d) *central-registry*))))
-    (or (let ((asdf (find-system "asdf" nil)))
-          (and asdf #+asdf2 (version-satisfies asdf "3.0.1")))
-        (maybe-register (merge-pathnames "common-lisp/asdf/" (user-homedir-pathname)))
-        (maybe-register "/usr/share/common-lisp/source/asdf/"))))
-
-;; Make sure we use the latest ASDF available, if not 3.0.1
-(defparameter asdf::*asdf-verbose* nil) ; for old versions of ASDF such as XCL's 2.014.2
-(setf *load-verbose* nil asdf::*verbose-out* nil)
-(unless (or #+asdf2 (asdf:version-satisfies (asdf:asdf-version) "3.0.1"))
-  (handler-bind ((warning #'muffle-warning))
-    (let (#+(and abcl asdf3) ; Why does the above not suffice?
-          (uiop::*uninteresting-conditions* (cons 'warning uiop::*uninteresting-conditions*)))
-      (operate 'load-op :asdf :verbose nil)))))
+  (in-package :asdf))
 NIL
 ":" 't #-cl-launch ;'; cl_fragment<<'NIL'
 ;; Because of ASDF upgrade punting, this ASDF package may be a new one.

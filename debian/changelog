@@ -1,3 +1,10 @@
+cl-launch (4.0.4-1) unstable; urgency=low
+
+  * Try even harder to load ASDF.
+  * Update documentation, version numbers, etc. Improve release.
+
+ -- Francois-Rene Rideau <fare@tunes.org>  Sat, 26 Apr 2014 12:36:51 -0400
+
 cl-launch (4.0.3-1) unstable; urgency=low
 
   * ~/common-lisp/ not ~/cl/ is where ASDF 3.1 standardizes
