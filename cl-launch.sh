@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper generator for Common Lisp software -*- Lisp -*-
-CL_LAUNCH_VERSION='4.0.4'
+CL_LAUNCH_VERSION='4.0.4.1'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -175,6 +175,7 @@ if it isn't included in your operating system's cl-launch package).
 We'd like to homestead the path /usr/bin/cl while we can, so that
 script authors can reasonably expect a script to work when it starts with:
 	#!/usr/bin/cl
+(See SIMPLE CL-LAUNCH SCRIPTS below for caveats with #! scripts though.)
 
 To work properly, cl-launch 4.0.4 depends on ASDF 3.0.1 or later, and
 on its portability layer UIOP, to manage compilation and image life cycle.
@@ -613,6 +614,24 @@ Also, using -X as your very first option and -- as your last will ensure that
 the script works even if its name starts with a '(' or a '-', in addition
 to working with older versions of cl-launch.
 
+Note however that Darwin and possibly other BSD kernels or old Linux kernels
+don't like the #! interpreter to itself be interpreted. On Darwin (and maybe
+other BSD systems?), you use /usr/bin/env as a trampoline, as in
+  #!/usr/bin/env /usr/bin/cl -sp my-package -E main
+or
+  #!/usr/bin/env cl-launch -sp my-package -E main
+However, that recipe might not work on older Linuxor BSD kernels, that
+don't properly space-separate the first-line arguments in a #! scripts but
+provide them all (if any, after stripping the first line to 127 characters)
+as a single argument in first position (cl-launch itself knows to work around
+this limitation peculiarity, but can only do so after it is itself launched).
+The full portable solution is thus as follows, where the ":" ; ensures that
+the script should remain valid bilingual shell and Lisp code:
+  #!/bin/sh
+  ":" ; exec cl-launch -X -sp my-package -E main -- "\$0" \${1+"\$@"} || exit
+(Actually "\$@" instead of \${1+"\$@"} should work just fine,
+unless you have an antique shell.)
+
 Note that if you don't need Lisp code to be loaded from your script,
 with everything happening in the build specification, then you may instead
 use a simple #!/bin/sh shell script from which you
@@ -623,7 +642,7 @@ shell and/or kernel combination doesn't support using cl-launch as a script
 interpreter, then you may instead start your script with the following lines
 (stripping leading spaces):
   #!/bin/sh
-  ":" ; exec cl-launch -X -- "\$0" "\$@" || exit 42
+  ":" ; exec cl-launch -X -- "\$0" "\$@" || exit
   (format t "It works!~%")
 Note that a mainline Linux kernel only supports the recursive #!
 implicit in #!/usr/bin/cl-launch since 2.6.27.9.
