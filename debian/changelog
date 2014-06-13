@@ -1,3 +1,10 @@
+cl-launch (4.0.5-1) unstable; urgency=low
+
+  * Fix issues when dumping image on ECL: handle --eval correctly,
+    avoid a costly initialization of source-registry when unnecessary.
+
+ -- Francois-Rene Rideau <fare@tunes.org>  Fri, 13 Jun 2014 13:32:46 -0400
+
 cl-launch (4.0.4-1) unstable; urgency=low
 
   * Try even harder to load ASDF.

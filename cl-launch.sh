@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper generator for Common Lisp software -*- Lisp -*-
-CL_LAUNCH_VERSION='4.0.4.1'
+CL_LAUNCH_VERSION='4.0.5'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -2255,7 +2255,10 @@ NIL
                  (maybe-done-stage-2)
                  (error "We could only load ASDF ~A but we need ASDF ~A"
                         (asdf-version) required-asdf-version)))
-        (call-maybe-verbosely nil #'stage-1))))
+        ;; :asdf3.1 is both more recent than required and self-upgrading, so doesn't need this dance
+        ;; :asdf3 is self-upgrading but might not be recent enough (it could be a pre-release).
+        (unless (member :asdf3.1 *features*)
+          (call-maybe-verbosely nil #'stage-1)))))
 
   (in-package :asdf))
 NIL
@@ -2461,7 +2464,7 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
 				   :pathname ,(truename load-file)))))))
       ((:eval-input)
        (with-input (i arg)
-         (make-dependency 'load i :cl-user previous)))
+         (make-dependency :load i :cl-user previous)))
       ((:require)
        `(:require ,arg))
       ((:load-system)
@@ -2495,7 +2498,8 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
                 (dependencies
                   (loop :with r = ()
                         :for (fun arg pkg) :in
-                        `((:load ,header-file :cl-user) ,@build (:load ,footer-file :cl-user))
+                        `((:load-system "asdf") (:load ,header-file :cl-user)
+                          ,@build (:load ,footer-file :cl-user))
                         :for dep = (make-dependency fun arg pkg r)
                         :do (setf r (append r (list dep)))
                         :finally (return r)))
