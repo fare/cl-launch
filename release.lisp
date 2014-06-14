@@ -8,7 +8,8 @@ exec "$(dirname $0)/cl-launch.sh" \
   (:use :cl :uiop :asdf :inferior-shell :optima :optima.ppcre)
   ;; Note: the exports are the list of available commands.
   (:export #:rep #:clean
-           #:debian-package #:publish-debian-package #:debian-package-all #:quickrelease))
+           #:source #:quickrelease
+           #:debian-package #:publish-debian-package #:debian-package-all))
 
 (in-package :cl-launch-release)
 
@@ -105,10 +106,17 @@ exec "$(dirname $0)/cl-launch.sh" \
       (run `(rsync -av --delete ,cldir "common-lisp.net:/project/xcvb/public_html/cl-launch/") :show t))
     (values)))
 
+(defun source ()
+  (with-current-directory ()
+    (run `(./cl-launch.sh --include ,(getcwd) "-B" install_path))))
+
+
 (defun quickrelease ()
   (let* ((version (script-version)) ;; no need to compare with the debian version
          (link (strcat "cl-launch-" version))
          (tarball (strcat link ".tar.gz")))
+    (clean)
+    (source)
     (with-current-directory ((pn "../"))
       (run `(pwd) :show t)
       (clean)
