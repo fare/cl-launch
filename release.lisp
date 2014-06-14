@@ -110,16 +110,15 @@ exec "$(dirname $0)/cl-launch.sh" \
   (with-current-directory ()
     (run `(./cl-launch.sh --include ,(getcwd) "-B" install_path))))
 
-
 (defun quickrelease ()
   (let* ((version (script-version)) ;; no need to compare with the debian version
          (link (strcat "cl-launch-" version))
          (tarball (strcat link ".tar.gz")))
-    (clean)
-    (source)
+    (with-current-directory ()
+      (clean)
+      (source))
     (with-current-directory ((pn "../"))
       (run `(pwd) :show t)
-      (clean)
       (run `(rm -f ,link))
       (run `(ln -s cl-launch ,link))
       (run `(tar zcfh ,tarball --exclude .git ,link))
