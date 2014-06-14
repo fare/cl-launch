@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper generator for Common Lisp software -*- Lisp -*-
-CL_LAUNCH_VERSION='4.0.5'
+CL_LAUNCH_VERSION='4.0.6'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -9,7 +9,7 @@ AUTHOR_NOTE="\
 SHORT_LICENSE="\
 # cl-launch is available under the terms of the bugroff license.
 #	http://tunes.org/legalese/bugroff.html
-# You may at your leisure use the LLGPL instead < http://www.cliki.net/LLGPL >
+# You may at your leisure use the MIT license instead < http://opensource.org/licenses/MIT >
 "
 WEB_SITE="# For the latest version of cl-launch, see its web page at:
 #	http://www.cliki.net/cl-launch
@@ -48,8 +48,8 @@ DEFAULT_USE_QUICKLISP=
 unset \
 	SOFTWARE_BUILD_FORMS SOFTWARE_FINAL_FORMS SOFTWARE_INIT_FORMS \
 	SOURCE_REGISTRY INCLUDE_PATH LISPS WRAPPER_CODE \
-	OUTPUT_FILE UPDATE \
-	LINE LINE1 LINE2 NO_QUIT CONTENT_FILE \
+	OUTPUT_FILE UPDATE LISP_CONTENT \
+	LINE LINE1 LINE2 NO_QUIT \
         TRIED_CONFIGURATION HAS_CONFIGURATION \
 	EXEC_LISP DO_LISP DUMP LOAD_IMAGE RESTART RESTART_PACKAGE IMAGE IMAGE_OPT \
 	EXTRA_CONFIG_VARIABLES \
@@ -118,8 +118,8 @@ Software specification:
  -w CODE	--wrap CODE          shell wrapper CODE to run in cl-launch
  -l LISP...	--lisp LISP...	     try use these LISP implementation(s)
  -m IMAGE       --image IMAGE        build from Lisp image IMAGE
- -f FILE	--file FILE	     load lisp FILE while building
-		--load FILE	     same as above
+ -f FILE	--file FILE	     include lisp FILE while building
+ -L FILE	--load FILE	     load lisp FILE while building
  -S X		--source-registry X  override source registry of asdf systems
  -s SYSTEM	--system SYSTEM	     load asdf SYSTEM while building
 		--load-system SYSTEM same as above (buildapp compatibility)
@@ -201,13 +201,18 @@ in order of appearance:
 * evaluating one or several FORMS (option -e --eval) in the current package.
   The series of forms is evaluated as by LOAD, in a context where the package
   has been set to the current package (see below explanations on packages).
-* compiling a FILE and load the fasl (option -f --file --load)
-  If a filename specified with -f --file --load is '-' (without the quotes),
+* compiling a FILE and load the fasl (option -L --load)
+  Files are loaded with *package* bound to the current package (see below).
+* including a FILE, compiling it and loading the fasl (option -f --file)
+  The contents of the FILE, which will have be included in the output script,
+  will be compiled and the fasl loaded as if by option -L --load.
+  The difference matters mostly when creating an output script,
+  as opposed to executing the code immediately or dumping an image.
+  Only one file may be specified this way.
+  If a filename specified with -f --file is '-' (without the quotes),
   then the standard input is used. You may thus concatenate several files
   and feed them to cl-launch through a pipe.
-  Or you may write Lisp code that loads the files you need in order.
   To use a file named '-', pass the argument './-'.
-  Files are loaded with *package* bound to the current package (see below).
 * A script file, as specified by -X ... -- or by use of #! or by following
   options with an immediate filename that does not start with ( or -, counts
   as if preceded by --package cl-user --load and followed by --execute --
@@ -942,8 +947,10 @@ process_options () {
         unset CL_LAUNCH_VERBOSE ;;
       -e|--eval)
 	add_build_form "(:eval-input \"(in-package :$PACKAGE)$(kwote "$1")\")" ; shift ;;
-      -f|--file|--load)
-	add_build_form "(:load \"$(kwote "$1")\" :$PACKAGE)" ; shift ;;
+      -L|--load)
+        add_build_form "(:load \"$(kwote "$1")\" :$PACKAGE)" ; shift ;;
+      -f|--file)
+        add_build_form "(:load t :$PACKAGE)" ; set_lisp_content "$1" ; shift ;;
       -s|--system|--load-system)
 	add_build_form "(:load-system \"$1\")" ; shift ;;
       --require)
@@ -996,7 +1003,7 @@ process_options () {
       -x|--execute)
         OUTPUT_FILE="!" ;;
       -u|--update)
-	UPDATE="$1" ; shift ;;
+       UPDATE="$1" ; shift ;;
       -m|--image)
         LOAD_IMAGE="$1" ; shift ;;
       -d|--dump)
@@ -1084,6 +1091,15 @@ add_final_form () {
         SOFTWARE_FINAL_FORMS="$SOFTWARE_FINAL_FORMS${SOFTWARE_FINAL_FORMS+
 }${package_form}$1"
 }
+set_lisp_content () {
+  if [ -z "$1" ] ; then
+    ABORT "Empty argument after -f --file"
+  elif [ -n "$LISP_CONTENT" ] ; then
+    ABORT "You may only use option -f --file once"
+  else
+    LISP_CONTENT="$1"
+  fi
+}
 if [ -n "$BASH_VERSION$ZSH_VERSION" ] ; then
   stringbefore () { ECHOn "${2:0:$1}" ;}
   stringafter () { ECHOn "${2:$1}" ;}
@@ -1105,10 +1121,8 @@ For help, invoke script with help argument:
 ### Do the job
 guess_defaults () {
   if [ -n "$UPDATE" ] ; then
-    SOFTWARE_FILE=
     : "${OUTPUT_FILE:=$UPDATE}"
   fi
-  LISP_CONTENT="$SOFTWARE_FILE"
 }
 # Configuration
 system_preferred_lisps () {
@@ -1131,7 +1145,7 @@ try_resource_files () {
 }
 print_configuration () {
   print_var \
-	SOFTWARE_FILE SOFTWARE_SYSTEM SOFTWARE_INIT_FORMS SOFTWARE_FINAL_FORMS \
+	LISP_CONTENT SOFTWARE_SYSTEM SOFTWARE_INIT_FORMS SOFTWARE_FINAL_FORMS \
 	SOURCE_REGISTRY INCLUDE_PATH LISPS WRAPPER_CODE \
         DUMP RESTART IMAGE_BASE IMAGE_DIR IMAGE \
 	$EXTRA_CONFIG_VARIABLES
@@ -1154,22 +1168,10 @@ ensure_configuration () {
   fi
 }
 adjust_configuration () {
-  : INCLUDE_PATH="$INCLUDE_PATH" SOFTWARE_FILE="$SOFTWARE_FILE"
+  : INCLUDE_PATH="$INCLUDE_PATH" LISP_CONTENT="$LISP_CONTENT"
   if [ -n "$INCLUDE_PATH" ] ; then
     AUTHOR_NOTE= SHORT_LICENSE= LICENSE_COMMENT=
   fi
-  case "$SOFTWARE_FILE" in
-    ""|/dev/null) LISP_CONTENT= ;;
-    /*) if [ -n "$INCLUDE_PATH" ] ; then
-          LISP_CONTENT=
-        else
-          LISP_CONTENT="$SOFTWARE_FILE" SOFTWARE_FILE="."
-        fi ;;
-    .) LISP_CONTENT= SOFTWARE_FILE="." ;;
-    -) LISP_CONTENT= SOFTWARE_FILE="-" ;;
-    *) LISP_CONTENT="$SOFTWARE_FILE" SOFTWARE_FILE="." ;;
-  esac
-  : LISP_CONTENT="$LISP_CONTENT" SOFTWARE_FILE="$SOFTWARE_FILE"
 }
 include_license () {
   if [ -n "$DISCLAIMER" ] ; then
@@ -1198,12 +1200,6 @@ print_lisp_launch () {
   if [ -n "${SOURCE_REGISTRY}" ] ; then
     ECHOn " :source-registry \"$(kwote "$SOURCE_REGISTRY")\""
   fi
-  case "${SOFTWARE_FILE}" in
-    /dev/null|"") : ;;
-    -) ECHOn " :load t" ;;
-    .) ECHOn " :load :self" ;;
-    *) ECHOn " :load \"$(kwote "$SOFTWARE_FILE")\""
-  esac
   if [ -n "${USE_QUICKLISP}" ] ; then
     ECHOn " :quicklisp t"
   fi
@@ -1237,7 +1233,7 @@ print_lisp_content () {
   extract_lisp_content
 }
 include_lisp_content () {
-  if [ "$SOFTWARE_FILE" = . ] ; then print_lisp_content ; fi
+  if [ -n "$LISP_CONTENT" ] ; then print_lisp_content ; fi
 }
 include_shell_wrapper () {
   ECHO "$BASIC_ENV_CODE"
@@ -1536,9 +1532,6 @@ process_software_1 () {
 }
 extract_and_process_software_2 () {
   with_input ensure_configuration
-  if [ "." = "$SOFTWARE_FILE" ] ; then
-    SOFTWARE_FILE="${UPDATE}"
-  fi
   if [ "x-" = "x$UPDATE" ] ; then
     extract_lisp_content | process_software_2 "$@"
   else
@@ -2209,7 +2202,7 @@ NIL
                  (try-file-stage-1
                   "asdf/ under the default (hidden) CL source directory ~/.local/share/common-lisp/"
                   (hidden-default-user-asdf-lisp))
-                 #+(or unix linux bsd)
+                 #+(or unix linux bsd darwin)
                  (progn
                    (try-file-stage-1
                     "asdf/ under the local system CL source directory /usr/local/share/common-lisp/"
@@ -2282,50 +2275,51 @@ NIL
 (progn
 (defvar *cl-launch-file* nil) ;; name of this very file
 (defvar *verbose* nil)
-(progn
-  (defun dump-stream-to-file (i n)
-    (with-output-file (o n) (copy-stream-to-stream i o)))
-  (defun dump-sexp-to-file (x n)
-    (with-output-file (o n) (write x :stream o :pretty t :readably t)))
-  (defvar *temporary-filenames* nil)
-  (defvar *temporary-file-prefix*
-    (format nil "~Acl-launch-~A-" *temporary-directory* (getenvp "CL_LAUNCH_PID")))
-  (defun make-temporary-filename (x)
-    (strcat *temporary-file-prefix* x))
-  (defun register-temporary-filename (n)
-    (push n *temporary-filenames*)
-    n)
-  (defun temporary-filename (x)
-    (register-temporary-filename (make-temporary-filename x)))
-  (defun temporary-file-from-foo (dumper arg x)
-    (let ((n (temporary-filename x)))
-      (funcall dumper arg n)
-      n))
-  (defun temporary-file-from-stream (i x)
-    (temporary-file-from-foo #'dump-stream-to-file i x))
-  (defun temporary-file-from-string (i x)
-    (temporary-file-from-foo
-     #'(lambda (i n) (with-output-file (o n) (princ i o))) i x))
-  (defun temporary-file-from-sexp (i x)
-    (temporary-file-from-foo #'dump-sexp-to-file i x))
-  (defun temporary-file-from-file (f x)
-    (with-open-file (i f :direction :input :if-does-not-exist :error)
-      (temporary-file-from-stream i x)))
-  (defun ensure-lisp-file-name (x &optional (name "load.lisp"))
-    (let ((p (pathname x)))
-      (if (equal (pathname-type p) "lisp")
-          p
-          (temporary-file-from-file p name))))
-  (defun ensure-lisp-file (x &optional (name "load.lisp"))
-    (cond
-      ((eq x t) (temporary-file-from-stream *standard-input* "load.lisp"))
-      ((streamp x) (temporary-file-from-stream x "load.lisp"))
-      ((eq x :self) (ensure-lisp-file-name *cl-launch-file* name))
-      (t (ensure-lisp-file-name x name))))
-  (defun cleanup-temporary-files ()
-    (loop :for n = (pop *temporary-filenames*)
-          :while n :do
-          (ignore-errors (delete-file n)))))
+(defun dump-stream-to-file (i n)
+  (with-output-file (o n) (copy-stream-to-stream i o)))
+(defun dump-sexp-to-file (x n)
+  (with-output-file (o n) (write x :stream o :pretty t :readably t)))
+(defvar *temporary-filenames* nil)
+(defvar *temporary-file-prefix*
+  (format nil "~Acl-launch-~A-" *temporary-directory* (getenvp "CL_LAUNCH_PID")))
+(defun make-temporary-filename (x)
+  (strcat *temporary-file-prefix* x))
+(defun register-temporary-filename (n)
+  (push n *temporary-filenames*)
+  n)
+(defun temporary-filename (x)
+  (register-temporary-filename (make-temporary-filename x)))
+(defun temporary-file-from-foo (dumper arg x)
+  (let ((n (temporary-filename x)))
+    (funcall dumper arg n)
+    n))
+(defun temporary-file-from-stream (i x)
+  (temporary-file-from-foo #'dump-stream-to-file i x))
+(defun temporary-file-from-string (i x)
+  (temporary-file-from-foo
+   #'(lambda (i n) (with-output-file (o n) (princ i o))) i x))
+(defun temporary-file-from-sexp (i x)
+  (temporary-file-from-foo #'dump-sexp-to-file i x))
+(defun temporary-file-from-file (f x)
+  (with-open-file (i f :direction :input :if-does-not-exist :error)
+    (temporary-file-from-stream i x)))
+(defun ensure-lisp-file-name (x &optional (name "load.lisp"))
+  (let ((p (pathname x)))
+    (if (equal (pathname-type p) "lisp")
+        p
+        (temporary-file-from-file p name))))
+(defun ensure-lisp-file (x &optional (name "load.lisp"))
+  (cond
+    ((eq x t)
+     (if (equal *cl-launch-file* "-")
+         (temporary-file-from-stream *standard-input* "load.lisp")
+         (ensure-lisp-file-name *cl-launch-file* name)))
+    ((streamp x) (temporary-file-from-stream x "load.lisp"))
+    (t (ensure-lisp-file-name x name))))
+(defun cleanup-temporary-files ()
+  (loop :for n = (pop *temporary-filenames*)
+        :while n :do
+          (delete-file-if-exists n)))
 (defun file-newer-p (new-file old-file)
   "Returns true if NEW-FILE is strictly newer than OLD-FILE."
   (> (file-write-date new-file) (file-write-date old-file)))
@@ -2415,9 +2409,11 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
        (let ((*package* (find-package (third x))))
          (etypecase (second x)
            (null nil)
-           ((eql t) (load* nil))
+           ((eql t)
+            (if (equal *cl-launch-file* "-")
+                (load* *standard-input*)
+                (load-file *cl-launch-file*)))
            (stream (load* (second x)))
-           ((eql :self) (load-file *cl-launch-file*))
            ((or pathname string) (load-file (second x))))))))
   (when final
     (eval-input final))

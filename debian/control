@@ -4,16 +4,16 @@ Priority: optional
 Homepage: http://www.cliki.net/cl-launch
 Maintainer: Francois-Rene Rideau <fare@tunes.org>
 Uploaders: Christoph Egger <christoph@debian.org>, Kan-Ru Chen <koster@debian.org>, Milan Zamazal <pdm@debian.org>, Peter Van Eynde <pvaneynd@debian.org>, Julien Danjou <acid@debian.org>
-Build-Depends: debhelper (>= 7.2.8)
+Build-Depends: debhelper (>= 9)
 Standards-Version: 3.9.3
 Vcs-Git: git://common-lisp.net/projects/xcvb/cl-launch.git
 
 Package: cl-launch
 Architecture: all
 Depends: ${misc:Depends}
-Suggests: cl-asdf (>= 2:3.0.0)
-Recommends: sbcl (>= 1:1.1.10), cl-asdf (>= 3.0.1)
-Breaks: cl-asdf (<< 2:2.015), common-lisp-controller (<= 7.2)
+Suggests: cl-asdf (>= 2:3.1.2)
+Recommends: sbcl (>= 1:1.1.10), cl-asdf (>= 2:3.0.1)
+Breaks: cl-asdf (<< 2:3.0.1), common-lisp-controller (<= 7.2)
 Description: uniform frontend to running Common Lisp code from the shell
  CL-Launch will allow you to invoke Common Lisp source code from the shell
  command line, from a shell script or as a Common Lisp script. It will also
@@ -24,7 +24,7 @@ Description: uniform frontend to running Common Lisp code from the shell
  CL-Launch will automatically detect a supported Common Lisp implementation
  and use adequate invocation options. It can also be configured to fit exactly
  the programmer's desires. Fully supported implementations are:
-        Allegro, CLISP, ClozureCL, CMUCL, ECL, SBCL, SCL.
+        Allegro, CLISP, ClozureCL, CMUCL, ECL, MKCL, SBCL, SCL.
  Partially supported implementations are:
         LispWorks Professional, ABCL, GCL, XCL.
  Creating standalone executables is supported on:

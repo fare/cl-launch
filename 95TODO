@@ -1,4 +1,4 @@
-TODO for cl-launch as of 4.0.1.6
+TODO for cl-launch as of 4.0.6
 
 * When resuming from an image then dumping another, the INCLUDE_PATH
    becomes a very bad variable to look for the image.
@@ -62,7 +62,7 @@ TODO for cl-launch as of 4.0.1.6
      That's hard to add, not that useful, and may require hacking
      both uiop and cl-launch to get it right. Lots of pain, no gain.
 
-* Better dependencies for --file and --eval
+* Better dependencies for --load (--file) and --eval
  ** Create an implicit in-memory system cl-launch/file-1, etc.,
     with a single file component, for each --file argument.
  ** Have it depend on all the previous systems and files, so dependencies work.
@@ -74,4 +74,3 @@ TODO for cl-launch as of 4.0.1.6
  ** on ECL, we still have to create temporary files for --eval,
    but we still don't want to have other systems depend on them
    except the top-level one.
-
