@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper generator for Common Lisp software -*- Lisp -*-
-CL_LAUNCH_VERSION='4.0.6'
+CL_LAUNCH_VERSION='4.0.7'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -1593,6 +1593,7 @@ print_cl_launch_asd () {
 ;;
 (asdf:defsystem :cl-launch
   :depends-on ((:version :asdf "3.0.1")) ; we need UIOP, included in ASDF 3 and later
+  :licence "MIT"
   :components ((:file "launcher")))
 END
 }
@@ -2384,27 +2385,20 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
   (setf *cl-launch-file* (getenvp "CL_LAUNCH_FILE")
         *verbose* (when (getenvp "CL_LAUNCH_VERBOSE") t)))
 
-;; We provide cl-launch, no need to go looking for it further!
-(unless (fboundp 'asdf::register-preloaded-system)
-  (eval
-   '(progn
-      (defvar asdf::*preloaded-systems* (make-hash-table :test 'equal))
-      (defun asdf::sysdef-preloaded-system-search (requested)
-        (let ((name (coerce-name requested)))
-          (multiple-value-bind (keys foundp) (gethash name asdf::*preloaded-systems*)
-            (when foundp
-              (apply 'make-instance 'system :name name :source-file (getf keys :source-file) keys)))))
-      (defun asdf::register-preloaded-system (system-name &rest keys)
-        (setf (gethash (coerce-name system-name) asdf::*preloaded-systems*) keys))
-      (asdf::appendf asdf:*system-definition-search-functions* '(asdf::sysdef-preloaded-system-search)))))
-
 (asdf::register-preloaded-system "cl-launch")
+
+(defun load-sys (system)
+  (if (find-package :quicklisp)
+      (let ((*standard-output* (make-broadcast-stream)))
+        (symbol-call :quicklisp :quickload system))
+      (asdf:load-system system)))
 
 (defun build-and-load (build restart final init quit)
   (dolist (x build)
     (ecase (first x)
-      ((:eval-input :load-system require)
-       (symbol-call :asdf (first x) (second x)))
+      ((:load-system) (load-sys (second x)))
+      ((:eval-input) (eval-input (second x)))
+      ((require) (require (second x)))
       ((:load)
        (let ((*package* (find-package (third x))))
          (etypecase (second x)
@@ -2506,6 +2500,7 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
 		     :build-operation program-op
 		     :build-pathname ,(ensure-absolute-pathname dump #'getcwd)
 		     :depends-on ,dependencies))))
+           (load-sys program-sys) ;; Give quicklisp a chance to download things
            (operate 'program-op program-sys))
       (cleanup-temporary-files))
     (quit)))
