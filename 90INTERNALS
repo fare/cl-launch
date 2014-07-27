@@ -21,3 +21,12 @@ in the shell function do_tests, which will double the testing time, currently
 over an hour for me.
 
 Happy hacking!
+
+
+Bibliography:
+
+* For how #! works, see the NetBSD man page on "script" in section 7: man 7 script
+	http://netbsd.gw.com/cgi-bin/man-cgi?script+7+NetBSD-current
+ Note that Linux recursively accepts a shell script as a script interpreter,
+ and therefore does not need the cl-shim binary, whereas
+ while MacOS splits the argument of a #! script by spaces.

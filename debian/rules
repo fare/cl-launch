@@ -24,7 +24,7 @@ build-stamp: configure-stamp
 	dh_testdir
 	sh ./cl-launch.sh \
 		--include /${include_dir} \
-		--lisp "cmucl sbcl clisp ecl openmcl gclcvs allegro lisp gcl" \
+		--lisp "sbcl ccl clisp abcl ecl cmucl allegro lispworks scl gcl xcl" \
 		--rc \
 		-B generate_install_files
 	touch build-stamp
@@ -54,7 +54,6 @@ binary-indep: build install
 	dh_installdocs -i
 	dh_installchangelogs -i
 	dh_link -i
-	#dh_lisp -i
 	dh_compress -i
 	dh_fixperms -i
 	dh_installdeb -i

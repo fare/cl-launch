@@ -74,3 +74,5 @@ TODO for cl-launch as of 4.0.6
  ** on ECL, we still have to create temporary files for --eval,
    but we still don't want to have other systems depend on them
    except the top-level one.
+
+* Change manual so it starts with the minimum needed to use it.

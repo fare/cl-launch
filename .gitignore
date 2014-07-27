@@ -1,9 +1,10 @@
-# Generated during a (debian) build
+# Generated during a build
 build.xcvb
 cl-launch
 cl-launch.asd
 launcher.lisp
 wrapper.sh
+cl-shim
 
 # Generated when compiling with e.g. SLIME
 *.*f*sl

@@ -16,7 +16,7 @@ source:
 	@echo "Building Lisp source code for cl-launch in current directory"
 	@${CL_LAUNCH} --include ${PWD} -B install_path > /dev/null
 
-install: install_binary install_source install_system
+install: install_binary install_source install_system install_cl
 
 install_binary: install_binary_standalone
 
@@ -48,6 +48,18 @@ install_binary_with_include:
 	@sh ./cl-launch.sh --include ${INSTALL_SOURCE} --rc \
 		--lisp '$(LISPS)' \
 		--output ${INSTALL_BIN}/cl-launch -B install_bin > /dev/null
+
+cl-shim: cl-shim.c
+	cc -Os -W -Wall -Werror -DCL_LAUNCH_SCRIPT="\"${INSTALL_BIN}/cl-launch\"" -o $@ $<
+
+ifeq($(shell uname), Linux)
+install_cl: install_binary
+	ln -s cl-launch ${INSTALL_BIN}/cl
+else
+install_cl: cl-shim
+	cp -p cl-shim ${INSTALL_BIN}/cl
+endif
+
 
 clean:
 	git clean -xfd
