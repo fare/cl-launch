@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper generator for Common Lisp software -*- Lisp -*-
-CL_LAUNCH_VERSION='4.0.7'
+CL_LAUNCH_VERSION='4.0.7.1'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -150,6 +150,12 @@ Output options:
  -d IMAGE	--dump IMAGE         dump IMAGE for faster startup
  -X ... --	(see more help)	     use #!/.../cl-launch as script interpreter
  --		--		     end of arguments when using -x or -X
+
+A typical command-line invocation would be such as:
+cl -l sbcl -sp my-system-and-package '(some form)'
+
+A typical Common Lisp script starts with a line such as:
+#!/usr/bin/cl -sp my-system-and-package -E main
 EOF
 }
 print_help_footer () {
@@ -176,6 +182,9 @@ We'd like to homestead the path /usr/bin/cl while we can, so that
 script authors can reasonably expect a script to work when it starts with:
 	#!/usr/bin/cl
 (See SIMPLE CL-LAUNCH SCRIPTS below for caveats with #! scripts though.)
+Recent Linux kernels support a script interpreter itself being a script;
+BSD kernels don't and require a small C program cl-shim to be compiled and
+installed as /usr/bin/cl to use cl-launch this way.
 
 To work properly, cl-launch 4.0.4 depends on ASDF 3.0.1 or later, and
 on its portability layer UIOP, to manage compilation and image life cycle.

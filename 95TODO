@@ -46,6 +46,11 @@ TODO for cl-launch as of 4.0.6
 
 * Support these other options from Xach's buildapp?
    --load-path --asdf-path --asdf-tree --manifest-file --logfile
+   * asdf-path and asdf-tree would be accumulated into a source-registry
+     argument to be passed to cl-launch.
+   * load-path would not only require something similar, but also
+     using a SEARCH-AND-LOAD function that consults this path
+     before it loads something.
 
 * Maybe add these SBCL-specific options, too?
    * --compress-core
