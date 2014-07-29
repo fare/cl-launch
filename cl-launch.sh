@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper generator for Common Lisp software -*- Lisp -*-
-CL_LAUNCH_VERSION='4.0.7.6'
+CL_LAUNCH_VERSION='4.0.7.7'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -949,7 +949,7 @@ process_options () {
       -q|--quiet)
         unset CL_LAUNCH_VERBOSE ;;
       -e|--eval)
-	add_build_form "(:eval-input \"(in-package :$PACKAGE)$(kwote "$1")\")" ; shift ;;
+	add_build_form "(:eval \"(in-package :$PACKAGE)$(kwote "$1")\")" ; shift ;;
       -L|--load)
         add_build_form "(:load \"$(kwote "$1")\" :$PACKAGE)" ; shift ;;
       -f|--file)
@@ -2304,6 +2304,10 @@ NIL
    #'(lambda (i n) (with-output-file (o n :if-exists :rename-and-delete) (princ i o))) i x))
 (defun temporary-file-from-sexp (i x)
   (temporary-file-from-foo #'dump-sexp-to-file i x))
+(defun temporary-file-from-code (i x)
+  (if (stringp i)
+      (temporary-file-from-string i x)
+      (temporary-file-from-sexp i x)))
 (defun temporary-file-from-file (f x)
   (with-open-file (i f :direction :input :if-does-not-exist :error)
     (temporary-file-from-stream i x)))
@@ -2396,35 +2400,11 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
         (symbol-call :quicklisp :quickload system))
       (asdf:load-system system)))
 
-(defun build-and-load (build restart final init quit)
-  (dolist (x build)
-    (ecase (first x)
-      ((:load-system) (load-sys (second x)))
-      ((:eval-input) (eval-input (second x)))
-      ((require) (require (second x)))
-      ((:load)
-       (let ((*package* (find-package (third x))))
-         (etypecase (second x)
-           (null nil)
-           ((eql t)
-            (if (equal *cl-launch-file* "-")
-                (load* *standard-input*)
-                (load-file *cl-launch-file*)))
-           (stream (load* (second x)))
-           ((or pathname string) (load-file (second x))))))))
-  (when final
-    (eval-input final))
-  (setf *image-prelude* init
-        *image-entry-point* (when restart (ensure-function (car restart) :package (cdr restart)))
-        *lisp-interaction* (not quit)))
-
-
 ;;; We need this on all implementations when dumping an image,
 ;;; so that --eval and --file statements may properly depend
 ;;; on previously loaded systems, etc.
 ;;; To do it right, though, we want to only create a file
 ;;; for the --eval statement if needed by ECL...
-(defvar *in-compile* nil)
 (defvar *dependency-counter* 0)
 (defun cl-launch-files ()
   (when (and *cl-launch-file* (not (equal *cl-launch-file* "-")))
@@ -2440,17 +2420,18 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
     (list sys)))
 (defclass asdf::cl-source-file-in-package (cl-source-file)
   ((package :initarg :package :reader component-package)))
-(defmethod perform :around ((o compile-op) (c asdf::cl-source-file-in-package))
-  (let ((*package* (find-package (component-package c))))
-    (call-next-method)))
-(defclass asdf::cl-source-string (source-file)
-  ((string :initarg :string :initform nil :reader component-string)
+(defclass asdf::cl-source-code (source-file)
+  ((code :initarg :code :initform nil :reader component-code)
    (package :initarg :package :reader component-package)))
-(defmethod component-pathname ((c asdf::cl-source-string)) nil)
-(defmethod perform ((o compile-op) (c asdf::cl-source-string)))
-(defmethod perform ((o load-op) (c asdf::cl-source-string))
-  (let ((*package* (find-package (component-package c))))
-    (eval-input (or (component-string c) (component-name c)))))
+(handler-bind ((warning #'muffle-warning))
+  (defmethod perform :around ((o compile-op) (c asdf::cl-source-file-in-package))
+    (let ((*package* (find-package (component-package c))))
+      (call-next-method)))
+  (defmethod component-pathname ((c asdf::cl-source-code)) nil)
+  (defmethod perform ((o compile-op) (c asdf::cl-source-code)))
+  (defmethod perform ((o load-op) (c asdf::cl-source-code))
+    (let ((*package* (find-package (component-package c))))
+      (eval-thunk (or (component-code c) (component-name c))))))
 (defun make-dependency-system (rdeps options)
   ;; Make a system for given dependencies,
   ;; return the new list of dependencies, i.e. a singleton of the system name.
@@ -2466,12 +2447,13 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
         `(:components ((:cl-source-file-in-package ,(pathname-name load-file)
                         :package ,pkg
                         :pathname ,(truename load-file)))))))
-    ((:eval-input)
+    ((:eval)
      #-(or ecl mkcl)
      (make-dependency-system previous
-      `(:components ((:cl-source-string ,arg :package :cl-user))))
+      `(:components ((:cl-source-code ,(format nil "code-~D" *dependency-counter*)
+                      :code ,arg :package :cl-user))))
      #+(or ecl mkcl)
-     (with-input (i arg)
+     (with-input (i (temporary-file-from-code i (format nil "build-~D.lisp" *dependency-counter*)))
        (make-dependency :load i :cl-user previous)))
     ((:require)
      (cons `(:require ,arg) previous))
@@ -2481,34 +2463,31 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
 (defun build-program (dump build restart final init quit)
   (unwind-protect
        (let* ((*compile-verbose* *verbose*)
-              (*in-compile* t)
               #+ecl (c::*suppress-compiler-warnings* (not *verbose*))
               #+ecl (c::*suppress-compiler-notes* (not *verbose*))
-              (header-file
-                (progn
-                  #+(or ecl mkcl)
-                  (when dump
-                    (setf *features* (remove :cl-launch *features*))
-                    (let* ((header
-                             (or *compile-file-pathname* *load-pathname* (getenvp "CL_LAUNCH_HEADER"))))
-                      (ensure-lisp-file header "header.lisp")))))
               (standalone (and (getenvp "CL_LAUNCH_STANDALONE") t))
               (op (if standalone 'program-op 'image-op))
-              (footer
-                `(setf
-                  *package* (find-package :cl-user)
-                  *image-dumped-p* ,(when dump (if standalone :executable t))
-                  *image-entry-point*
-                  ,(when restart `(ensure-function ,(car restart) :package ,(cdr restart)))
-                  *image-prelude* ,init
-                  *image-postlude* ,final
-                  *lisp-interaction* ,(not quit)))
-              (footer-file (temporary-file-from-sexp footer "footer.lisp"))
               (dependencies
                 (loop :with r = ()
                       :for (fun arg pkg) :in
-                      `((:load-system "asdf") ,@(when header-file `((:load ,header-file :cl-user)))
-                        ,@build (:load ,footer-file :cl-user))
+                      `((:load-system "asdf")
+                        ,@(when dump
+                            #+(or ecl mkcl)
+                            (let ((header
+                                    (or (current-lisp-file-pathname) (getenvp "CL_LAUNCH_HEADER"))))
+                              (setf *features* (remove :cl-launch *features*))
+                              `(:load ,(ensure-lisp-file header "header.lisp") :cl-user)))
+                        ,@build
+                        ,(let ((footer
+                                 `(setf
+                                   *package* (find-package :cl-user)
+                                   *image-dumped-p* ,(when dump (if standalone :executable t))
+                                   *image-entry-point*
+                                   ,(when restart `(ensure-function ,(car restart) :package ,(cdr restart)))
+                                   *image-prelude* ,init
+                                   *image-postlude* ,final
+                                   *lisp-interaction* ,(not quit))))
+                           `(:eval ,footer :cl-user)))
                       :do (setf r (make-dependency fun arg pkg r))
                       :finally (return r)))
               (program-sys
