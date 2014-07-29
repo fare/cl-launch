@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper generator for Common Lisp software -*- Lisp -*-
-CL_LAUNCH_VERSION='4.0.7.2'
+CL_LAUNCH_VERSION='4.0.7.3'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -2511,11 +2511,12 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
                         ,@build (:load ,footer-file :cl-user))
                       :do (setf r (make-dependency fun arg pkg r))
                       :finally (return r)))
+              (op (if (getenvp "CL_LAUNCH_STANDALONE") 'program-op 'image-op))
               (program-sys
                 (make-temporary-system
                  "program" dependencies
                  `(:serial t
-                   :build-operation program-op
+                   :build-operation ,op
                    :build-pathname ,(when dump (ensure-absolute-pathname dump #'getcwd))
                    ;; Provide a sensible timestamp
                    ;; For SBCL and other platforms that die on dump-image, clean before the end:
@@ -2523,7 +2524,7 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
          (load-sys program-sys) ;; Give quicklisp a chance to download things
          (when dump
            (setf *features* (remove :cl-launched *features*))
-           (operate (if (getenvp "CL_LAUNCH_STANDALONE") 'program-op 'image-op) program-sys)))
+           (operate op program-sys)))
     (cleanup-temporary-files))
   (unless dump
     (restore-image))
