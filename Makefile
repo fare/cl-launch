@@ -50,7 +50,7 @@ install_binary_with_include:
 		--output ${INSTALL_BIN}/cl-launch -B install_bin > /dev/null
 
 cl-shim: cl-shim.c
-	cc -Os -W -Wall -Werror -DCL_LAUNCH_SCRIPT="\"${INSTALL_BIN}/cl-launch\"" -o $@ $<
+	cc -Os -s -W -Wall -Werror -DCL_LAUNCH_SCRIPT="\"${INSTALL_BIN}/cl-launch\"" -o $@ $<
 
 ifeq($(shell uname), Linux)
 install_cl: install_binary

@@ -1,4 +1,4 @@
-TODO for cl-launch as of 4.0.6
+TODO for cl-launch as of 4.0.7.2
 
 * When resuming from an image then dumping another, the INCLUDE_PATH
    becomes a very bad variable to look for the image.
@@ -54,7 +54,8 @@ TODO for cl-launch as of 4.0.6
 
 * Maybe add these SBCL-specific options, too?
    * --compress-core
-     this one is trivial to add
+     this one is trivial to add --
+     but semantics does buildapp give to this option on ccl?
    * --dynamic-space-size
      a lot of implementation have something like that.
      Abstract it away, or leave it implementation-specific?
@@ -63,6 +64,7 @@ TODO for cl-launch as of 4.0.6
    * --sbcl
      Can already be done with:
        --wrap 'SBCL="/opt/sbcl/bin/sbcl"
+     Implement it that way?
    * --core-only
      That's hard to add, not that useful, and may require hacking
      both uiop and cl-launch to get it right. Lots of pain, no gain.
@@ -80,4 +82,3 @@ TODO for cl-launch as of 4.0.6
    but we still don't want to have other systems depend on them
    except the top-level one.
 
-* Change manual so it starts with the minimum needed to use it.

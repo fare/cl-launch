@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper generator for Common Lisp software -*- Lisp -*-
-CL_LAUNCH_VERSION='4.0.7.1'
+CL_LAUNCH_VERSION='4.0.7.2'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -38,7 +38,7 @@ license_information
 
 ### Settings for the current installation -- adjust to your convenience
 ### Or see documentation for using commands -B install and -B install_bin.
-DEFAULT_LISPS="sbcl ccl clisp cmucl ecl abcl scl allegro lispworks gcl xcl"
+DEFAULT_LISPS="sbcl ccl clisp abcl allegro lispworks scl cmucl ecl mkcl gcl xcl"
 DEFAULT_INCLUDE_PATH=
 DEFAULT_USE_CL_LAUNCHRC=
 DEFAULT_USE_CLBUILD=
@@ -95,18 +95,18 @@ print_help_header () {
 print_help () {
 cat <<EOF
 Usage:
-	$PROGBASE '(lisp (form) to evaluate)'
-	    evaluate specified Lisp form, print the results followed by newline
+	$PROGBASE [options] '(lisp (form) to evaluate)'
+	    evaluate specified form, print the results followed by newline
+	    as in: cl -l sbcl -sp my-system-and-package '(some form)'
 	$PROGBASE [options] script-file arguments...
-	    load specified Lisp script, passing arguments
+	    run specified Lisp script, passing arguments, as in a script with
+	    #!/usr/bin/cl -sp my-system-and-package -E main
 	$PROGBASE [options] --execute [options] [-- arguments...]
 	    run the specified software without generating a script (default)
 	$PROGBASE [options] --output SCRIPT [options]
-	    generate a runnable shell script FILE from a software specification
-	$PROGBASE [options] --update FILE [options]
-	    same as above, but reuse software specification from previous FILE
+	    generate a runnable shell script from the software specification
 	$PROGBASE [ --version | --help | --more-help ]
-	    display information (might be long, you may pipe it into a pager)
+	    display information (can be long, you may pipe it into a \$PAGER)
 
 Special modes:
  -h  or  -?	--help		 display a short help message
@@ -145,17 +145,11 @@ Software specification:
  -q             --quiet              be quite quiet while building (default)
 
 Output options:
- -x      -o !   --execute	     run the thing NOW (default)
+ -x      -o !   --execute	     run the specified software NOW (default)
  -o FILE	--output FILE	     create executable FILE
  -d IMAGE	--dump IMAGE         dump IMAGE for faster startup
  -X ... --	(see more help)	     use #!/.../cl-launch as script interpreter
  --		--		     end of arguments when using -x or -X
-
-A typical command-line invocation would be such as:
-cl -l sbcl -sp my-system-and-package '(some form)'
-
-A typical Common Lisp script starts with a line such as:
-#!/usr/bin/cl -sp my-system-and-package -E main
 EOF
 }
 print_help_footer () {
@@ -2424,101 +2418,122 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
         *image-entry-point* (when restart (ensure-function (car restart) :package (cdr restart)))
         *lisp-interaction* (not quit)))
 
-(defun build-and-run (build restart final init quit)
-  (build-and-load build restart final init quit)
-  (restore-image))
 
-#-ecl
-(defun build-and-dump (dump build restart final init quit)
-  (build-and-load build restart final init quit)
-  (setf *features* (remove :cl-launched *features*))
-  (dump-image dump :executable (getenvp "CL_LAUNCH_STANDALONE"))
+;;; We need this on all implementations when dumping an image,
+;;; so that --eval and --file statements may properly depend
+;;; on previously loaded systems, etc.
+;;; To do it right, though, we want to only create a file
+;;; for the --eval statement if needed by ECL...
+(defvar *in-compile* nil)
+(defvar *dependency-counter* 0)
+(defun cl-launch-files ()
+  (when (and *cl-launch-file* (not (equal *cl-launch-file* "-")))
+    (list *cl-launch-file*)))
+(defun make-temporary-system (stem rdeps options)
+  ;; Make a temporary system with given name stem and options
+  ;; return the new list of dependencies, i.e. a singleton of the actual system name.
+  (let ((sys (strcat "cl-launch-" stem)))
+    (eval `(progn
+             (defsystem ,sys :pathname nil :depends-on ,(reverse rdeps) ,@options)
+             (defmethod input-files ((o operation) (s (eql (find-system ,sys))))
+               ',(cl-launch-files))))
+    (list sys)))
+(defclass asdf::cl-source-file-in-package (cl-source-file)
+  ((package :initarg :package :reader component-package)))
+(defmethod perform :around ((o compile-op) (c asdf::cl-source-file-in-package))
+  (let ((*package* (find-package (component-package c))))
+    (call-next-method)))
+(defclass asdf::cl-source-string (source-file)
+  ((string :initarg :string :initform nil :reader component-string)
+   (package :initarg :package :reader component-package)))
+(defmethod component-pathname ((c asdf::cl-source-string)) nil)
+(defmethod perform ((o compile-op) (c asdf::cl-source-string)))
+(defmethod perform ((o load-op) (c asdf::cl-source-string))
+  (let ((*package* (find-package (component-package c))))
+    (eval-input (or (component-string c) (component-name c)))))
+(defun make-dependency-system (rdeps options)
+  ;; Make a system for given dependencies,
+  ;; return the new list of dependencies, i.e. a singleton of the system name.
+  (let ((name (format nil "build-~D" *dependency-counter*)))
+    (incf *dependency-counter*)
+    (make-temporary-system name rdeps options)))
+(defun make-dependency (fun arg pkg previous)
+  ;; Make a dependency, return the new list of dependencies
+  (ecase fun
+    ((:load)
+     (let ((load-file (ensure-lisp-file arg "load.lisp")))
+       (make-dependency-system previous
+        `(:components ((:cl-source-file-in-package ,(pathname-name load-file)
+                        :package ,pkg
+                        :pathname ,(truename load-file)))))))
+    ((:eval-input)
+     #-(or ecl mkcl)
+     (make-dependency-system previous
+      `(:components ((:cl-source-string ,arg :package :cl-user))))
+     #+(or ecl mkcl)
+     (with-input (i arg)
+       (make-dependency :load i :cl-user previous)))
+    ((:require)
+     (cons `(:require ,arg) previous))
+    ((:load-system)
+     (cons arg previous))))
+
+(defun build-program (dump build restart final init quit)
+  (unwind-protect
+       (let* ((*compile-verbose* *verbose*)
+              (*in-compile* t)
+              #+ecl (c::*suppress-compiler-warnings* (not *verbose*))
+              #+ecl (c::*suppress-compiler-notes* (not *verbose*))
+              (*features* (remove :cl-launch *features*))
+              (header-file
+                (progn
+                  #+(or ecl mkcl)
+                  (when dump
+                    (let* ((header
+                             (or *compile-file-pathname* *load-pathname* (getenvp "CL_LAUNCH_HEADER"))))
+                      (ensure-lisp-file header "header.lisp")))))
+              (standalone (and (getenvp "CL_LAUNCH_STANDALONE") t))
+              (footer
+                `(progn
+                   (setf
+                    *package* (find-package :cl-user)
+                    *image-dumped-p* ,(if standalone :executable t)
+                    *image-entry-point*
+                    ,(when restart `(ensure-function ,(car restart) :package ,(cdr restart)))
+                    *image-prelude* ,init
+                    *image-postlude* ,final
+                    *lisp-interaction* ,(not quit))))
+              (footer-file (temporary-file-from-sexp footer "footer.lisp"))
+              (dependencies
+                (loop :with r = ()
+                      :for (fun arg pkg) :in
+                      `((:load-system "asdf") ,@(when header-file `((:load ,header-file :cl-user)))
+                        ,@build (:load ,footer-file :cl-user))
+                      :do (setf r (make-dependency fun arg pkg r))
+                      :finally (return r)))
+              (program-sys
+                (make-temporary-system
+                 "program" dependencies
+                 `(:serial t
+                   :build-operation program-op
+                   :build-pathname ,(when dump (ensure-absolute-pathname dump #'getcwd))
+                   ;; Provide a sensible timestamp
+                   ;; For SBCL and other platforms that die on dump-image, clean before the end:
+                   :perform (image-op :before (o c) (cleanup-temporary-files))))))
+         (load-sys program-sys) ;; Give quicklisp a chance to download things
+         (when dump
+           (setf *features* (remove :cl-launched *features*))
+           (operate (if (getenvp "CL_LAUNCH_STANDALONE") 'program-op 'image-op) program-sys)))
+    (cleanup-temporary-files))
+  (unless dump
+    (restore-image))
   (quit 0))
-
-;;; Attempt at compiling directly with ECL's make-build and temporary wrapper asd's
-#+ecl
-(progn
-  (defvar *in-compile* nil)
-  (defvar *dependency-counter* 0)
-  (defun make-temporary-system (name options)
-    (let* ((sys (pathname-name (temporary-filename name)))
-           (asd (temporary-file-from-sexp `(defsystem ,sys ,@options) (strcat name ".asd"))))
-      (asdf/find-system:load-asd asd :name sys)
-      sys))
-  (defclass asdf::cl-source-file-in-package (cl-source-file)
-    ((package :initarg :package :reader component-package)))
-  (defmethod perform :around ((o compile-op) (c asdf::cl-source-file-in-package))
-    (let ((*package* (find-package (component-package c))))
-      (call-next-method)))
-  (defun make-dependency (fun arg pkg previous)
-    (ecase fun
-      ((:load)
-       (let* ((load-file (ensure-lisp-file arg "load.lisp"))
-              (dep-name (format nil "build-~D" *dependency-counter*)))
-         (incf *dependency-counter*)
-         (make-temporary-system
-	  dep-name `(:depends-on ,previous
-		     :components ((:cl-source-file-in-package ,(pathname-name load-file)
-                                   :package ,pkg
-				   :pathname ,(truename load-file)))))))
-      ((:eval-input)
-       (with-input (i arg)
-         (make-dependency :load i :cl-user previous)))
-      ((:require)
-       `(:require ,arg))
-      ((:load-system)
-       arg)))
-  (defun build-and-dump (dump build restart final init quit)
-    (unwind-protect
-         (let* ((*compile-verbose* *verbose*)
-                (*in-compile* t)
-                (c::*suppress-compiler-warnings* (not *verbose*))
-                (c::*suppress-compiler-notes* (not *verbose*))
-                (*features* (remove :cl-launch *features*))
-                (header (or *compile-file-pathname* *load-pathname* (getenvp "CL_LAUNCH_HEADER")))
-                (header-file (ensure-lisp-file header "header.lisp"))
-                (standalone (and (getenvp "CL_LAUNCH_STANDALONE") t))
-                (footer
-                  `(progn
-		     (defun epilogue ()
-                       (setf
-                        *package* (find-package :cl-user)
-                        *image-dumped-p* ,(if standalone :executable t)
-                        *image-entry-point*
-                        ,(when restart `(ensure-function ,(car restart) :package ,(cdr restart)))
-                        *image-prelude* ,init
-                        *image-postlude* ,final
-                        *lisp-interaction* ,(not quit))
-		       ,(if standalone
-			    '(shell-boolean-exit (restore-image))
-			    '(progn (si::top-level t) (quit))))
-		     (unless *in-compile* (epilogue))))
-		(footer-file (temporary-file-from-sexp footer "footer.lisp"))
-                (dependencies
-                  (loop :with r = ()
-                        :for (fun arg pkg) :in
-                        `((:load-system "asdf") (:load ,header-file :cl-user)
-                          ,@build (:load ,footer-file :cl-user))
-                        :for dep = (make-dependency fun arg pkg r)
-                        :do (setf r (append r (list dep)))
-                        :finally (return r)))
-                (program-sys
-		  (make-temporary-system
-		   "program"
-		   `(:serial t
-		     :build-operation program-op
-		     :build-pathname ,(ensure-absolute-pathname dump #'getcwd)
-		     :depends-on ,dependencies))))
-           (load-sys program-sys) ;; Give quicklisp a chance to download things
-           (operate 'program-op program-sys))
-      (cleanup-temporary-files))
-    (quit)))
 
 (defun load-quicklisp ()
   (block nil
     (flet ((try (x) (when (probe-file* x) (return (load* x)))))
-      (try (subpathname (user-homedir-pathname) ".quicklisp/setup.lisp"))
       (try (subpathname (user-homedir-pathname) "quicklisp/setup.lisp"))
+      (try (subpathname (user-homedir-pathname) ".quicklisp/setup.lisp"))
       (error "Couldn't find quicklisp in your home directory. ~
               Go get it at http://www.quicklisp.org/beta/index.html"))))
 
@@ -2527,9 +2542,7 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
   (compute-arguments)
   (when source-registry (initialize-source-registry source-registry))
   (when quicklisp (load-quicklisp))
-  (if dump
-      (build-and-dump dump build restart final init quit)
-      (build-and-run build restart final init quit)))
+  (build-program dump build restart final init quit))
 
 (pushnew :cl-launch *features*))
 NIL
