@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper generator for Common Lisp software -*- Lisp -*-
-CL_LAUNCH_VERSION='4.0.7.4'
+CL_LAUNCH_VERSION='4.0.7.5'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -2493,16 +2493,16 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
                              (or *compile-file-pathname* *load-pathname* (getenvp "CL_LAUNCH_HEADER"))))
                       (ensure-lisp-file header "header.lisp")))))
               (standalone (and (getenvp "CL_LAUNCH_STANDALONE") t))
+              (op (if standalone 'program-op 'image-op))
               (footer
-                `(progn
-                   (setf
-                    *package* (find-package :cl-user)
-                    *image-dumped-p* ,(if standalone :executable t)
-                    *image-entry-point*
-                    ,(when restart `(ensure-function ,(car restart) :package ,(cdr restart)))
-                    *image-prelude* ,init
-                    *image-postlude* ,final
-                    *lisp-interaction* ,(not quit))))
+                `(setf
+                  *package* (find-package :cl-user)
+                  *image-dumped-p* ,(when dump (if standalone :executable t))
+                  *image-entry-point*
+                  ,(when restart `(ensure-function ,(car restart) :package ,(cdr restart)))
+                  *image-prelude* ,init
+                  *image-postlude* ,final
+                  *lisp-interaction* ,(not quit)))
               (footer-file (temporary-file-from-sexp footer "footer.lisp"))
               (dependencies
                 (loop :with r = ()
@@ -2511,13 +2511,15 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
                         ,@build (:load ,footer-file :cl-user))
                       :do (setf r (make-dependency fun arg pkg r))
                       :finally (return r)))
-              (op (if (getenvp "CL_LAUNCH_STANDALONE") 'program-op 'image-op))
               (program-sys
                 (make-temporary-system
                  "program" dependencies
                  `(:serial t
                    :build-operation ,op
                    :build-pathname ,(when dump (ensure-absolute-pathname dump #'getcwd))
+                   :entry-point ,(when restart
+                                   `(lambda ()
+                                      (funcall (ensure-function ,(car restart) :package ,(cdr restart)))))
                    ;; Provide a sensible timestamp
                    ;; For SBCL and other platforms that die on dump-image, clean before the end:
                    :perform (image-op :before (o c) (cleanup-temporary-files))))))
