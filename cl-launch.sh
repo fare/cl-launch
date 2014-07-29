@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper generator for Common Lisp software -*- Lisp -*-
-CL_LAUNCH_VERSION='4.0.7.3'
+CL_LAUNCH_VERSION='4.0.7.4'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -1467,14 +1467,14 @@ Try specifying a supported implementation with option --lisp (or \$LISP)"
   esac
 }
 use_dumped_image () {
-  : use_dumped_image $OUTPUT_FILE
+  : use_dumped_image $OUTPUT_FILE -- standalone: ${CL_LAUNCH_STANDALONE}
   compute_image_path "$DUMP"
   case "${CL_LAUNCH_STANDALONE}:${OUTPUT_FILE}" in
     :!) invoke_image "$@" ;;
     :*) make_image_invoker ;;
     t:!) if [ -n "$CL_LAUNCH_VERBOSE" ] ; then set -x ; fi ;
 	${IMAGE} "$@" ;;
-    t:*) ;;
+    t:*) : nothing to do ;;
   esac
 }
 make_image_invoker () {

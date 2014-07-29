@@ -81,8 +81,9 @@ t_system () {
   t_args "--system ..."
   t_next "$@" --system clt-asd --source-registry \
   "(:source-registry \
-     (:directory \"${PWD}\") (:tree ${ASDF_DIR}) \
+     (:directory \"${PWD}\") \
      :ignore-inherited-configuration)"
+  # (:tree ${ASDF_DIR}) \
 }
 t_init () {
   t_register "$(foo_require "$NUM:init" init)" xxx_t_init
