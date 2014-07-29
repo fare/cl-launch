@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper generator for Common Lisp software -*- Lisp -*-
-CL_LAUNCH_VERSION='4.0.7.5'
+CL_LAUNCH_VERSION='4.0.7.6'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -2280,9 +2280,9 @@ NIL
 (defvar *cl-launch-file* nil) ;; name of this very file
 (defvar *verbose* nil)
 (defun dump-stream-to-file (i n)
-  (with-output-file (o n) (copy-stream-to-stream i o)))
+  (with-output-file (o n :if-exists :rename-and-delete) (copy-stream-to-stream i o)))
 (defun dump-sexp-to-file (x n)
-  (with-output-file (o n) (write x :stream o :pretty t :readably t)))
+  (with-output-file (o n :if-exists :rename-and-delete) (write x :stream o :pretty t :readably t)))
 (defvar *temporary-filenames* nil)
 (defvar *temporary-file-prefix*
   (format nil "~Acl-launch-~A-" *temporary-directory* (getenvp "CL_LAUNCH_PID")))
@@ -2301,7 +2301,7 @@ NIL
   (temporary-file-from-foo #'dump-stream-to-file i x))
 (defun temporary-file-from-string (i x)
   (temporary-file-from-foo
-   #'(lambda (i n) (with-output-file (o n) (princ i o))) i x))
+   #'(lambda (i n) (with-output-file (o n :if-exists :rename-and-delete) (princ i o))) i x))
 (defun temporary-file-from-sexp (i x)
   (temporary-file-from-foo #'dump-sexp-to-file i x))
 (defun temporary-file-from-file (f x)
@@ -2433,7 +2433,7 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
   ;; Make a temporary system with given name stem and options
   ;; return the new list of dependencies, i.e. a singleton of the actual system name.
   (let ((sys (strcat "cl-launch-" stem)))
-    (eval `(progn
+    (eval `(handler-bind ((warning #'muffle-warning))
              (defsystem ,sys :pathname nil :depends-on ,(reverse rdeps) ,@options)
              (defmethod input-files ((o operation) (s (eql (find-system ,sys))))
                ',(cl-launch-files))))
@@ -2484,11 +2484,11 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
               (*in-compile* t)
               #+ecl (c::*suppress-compiler-warnings* (not *verbose*))
               #+ecl (c::*suppress-compiler-notes* (not *verbose*))
-              (*features* (remove :cl-launch *features*))
               (header-file
                 (progn
                   #+(or ecl mkcl)
                   (when dump
+                    (setf *features* (remove :cl-launch *features*))
                     (let* ((header
                              (or *compile-file-pathname* *load-pathname* (getenvp "CL_LAUNCH_HEADER"))))
                       (ensure-lisp-file header "header.lisp")))))
@@ -2522,10 +2522,11 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
                                       (funcall (ensure-function ,(car restart) :package ,(cdr restart)))))
                    ;; Provide a sensible timestamp
                    ;; For SBCL and other platforms that die on dump-image, clean before the end:
-                   :perform (image-op :before (o c) (cleanup-temporary-files))))))
+                   :perform (image-op :before (o c)
+                              (setf *features* (remove :cl-launched *features*))
+                              (cleanup-temporary-files))))))
          (load-sys program-sys) ;; Give quicklisp a chance to download things
          (when dump
-           (setf *features* (remove :cl-launched *features*))
            (operate op program-sys)))
     (cleanup-temporary-files))
   (unless dump
@@ -2540,7 +2541,7 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
       (error "Couldn't find quicklisp in your home directory. ~
               Go get it at http://www.quicklisp.org/beta/index.html"))))
 
-(defun run (&key quicklisp source-registry build dump restart final init (quit 0))
+(defun run (&key quicklisp source-registry build dump restart final init (quit t))
   (pushnew :cl-launched *features*)
   (compute-arguments)
   (when source-registry (initialize-source-registry source-registry))

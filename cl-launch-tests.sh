@@ -8,6 +8,7 @@ foo_require () {
 t_env () {
 [ -n "$BEGIN_TESTS" ] && return
 export DOH=doh
+export ASDF_OUTPUT_TRANSLATIONS="(:output-translations :inherit-configuration (\"$PWD\" (\"$PWD\" \"cache\")))"
 TCURR=
 BEGIN_TESTS='(in-package :cl-user)
 ;;(eval-when (:compile-toplevel) (format *trace-output* "~&Prologue compiled~%"))
@@ -60,7 +61,7 @@ t_args () { ARGS="$ARGS $1" ;}
 t_create () {
   create_file 644 "$1" echo "$2"
   TFILES="$TFILES $1" ;}
-t_cleanup () { rm $TFILES ;}
+t_cleanup () { rm $TFILES cache/* ; rmdir cache ;}
 t_file () {
   t_register "$(foo_require "$NUM:file" file)" $1
   t_create $TFILE \
@@ -151,7 +152,7 @@ t_make () {
 }
 t_check () {
   echo "cl-launch $ARGS"
-  PATH=${PWD}:$PATH "$@" "won" | tee clt.log >&2
+  ( PATH=${PWD}:$PATH "$@" "won" 2>&1) | tee clt.log >&2
   : RESULTS: "$(cat clt.log)"
   if [ -n "$TORIG" ] && [ -n "$TOUT" ] && ! cmp --quiet $TOUT $TORIG ; then
     echo "the updated file differs from the original one, although execution might not show the difference. Double check that with:
@@ -272,7 +273,7 @@ do_test () {
     if [ -n "$num" ] ; then
       NUM=$(printf "%02d" $num)
       case "$*" in
-        *out*noupdate*)
+        *noupdate*)
         # If we don't clean between runs of test/update, then
         # we have bizarre transient failures at test 12 or 40 when we e.g.
         #        DEBUG_RACE_CONDITION=t cl-launch -l clisp -B tests 8 12
@@ -291,7 +292,7 @@ test () {
   tests $@ && test_clean
 }
 test_clean () {
-  rm -rfv clt* ~/.cache/common-lisp/*/$(pwd)/clt* >&2
+  rm -rfv clt* cache/ >&2
 }
 fakeccl () {
   DO export LISP=ccl CCL=sbcl CCL_OPTIONS="--noinform --sysinit /dev/null --userinit /dev/null --eval (make-package':ccl) --eval (setf(symbol-function'ccl::quit)(symbol-function'sb-ext:quit)) --eval (setf(symbol-function'ccl::getenv)(symbol-function'sb-ext:posix-getenv))"
