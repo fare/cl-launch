@@ -1,4 +1,4 @@
-TODO for cl-launch as of 4.0.7.2
+TODO for cl-launch as of 4.0.7.7
 
 * When resuming from an image then dumping another, the INCLUDE_PATH
    becomes a very bad variable to look for the image.
@@ -36,6 +36,7 @@ TODO for cl-launch as of 4.0.7.2
    Therefore, /usr/bin/cl can have fast startup,
    and not have to spawn an external program
    unless explicitly requested a non-default implementation.
+   Maybe just add all the cl-launch features to buildapp.
 
 * Support --dispatched-entry as from Xach's buildapp:
    dispatched-entry would populate a data structure bound to
@@ -55,7 +56,8 @@ TODO for cl-launch as of 4.0.7.2
 * Maybe add these SBCL-specific options, too?
    * --compress-core
      this one is trivial to add --
-     but semantics does buildapp give to this option on ccl?
+     currently, buildapp silently ignores the option on CCL,
+     but Xach feels like he may issue an error in the future instead.
    * --dynamic-space-size
      a lot of implementation have something like that.
      Abstract it away, or leave it implementation-specific?
@@ -68,17 +70,3 @@ TODO for cl-launch as of 4.0.7.2
    * --core-only
      That's hard to add, not that useful, and may require hacking
      both uiop and cl-launch to get it right. Lots of pain, no gain.
-
-* Better dependencies for --load (--file) and --eval
- ** Create an implicit in-memory system cl-launch/file-1, etc.,
-    with a single file component, for each --file argument.
- ** Have it depend on all the previous systems and files, so dependencies work.
- ** Don't bother counting --eval, though, since there's no file to timestamp;
-   Document for the user that they are on their own if a change in
-   such --eval change the meaning of subsequent fasl files;
-   they may have to manually clear their cache.
- ** Provide a --force option to force recompilation?
- ** on ECL, we still have to create temporary files for --eval,
-   but we still don't want to have other systems depend on them
-   except the top-level one.
-
