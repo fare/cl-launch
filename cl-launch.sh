@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper generator for Common Lisp software -*- Lisp -*-
-CL_LAUNCH_VERSION='4.0.7.7'
+CL_LAUNCH_VERSION='4.0.7.8'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -2277,7 +2277,8 @@ NIL
 ":" 't #-cl-launch ;'; cl_fragment<<'NIL'
 ;;;; cl-launch initialization code
 (progn
-(defvar *cl-launch-file* nil) ;; name of this very file
+(defvar *cl-launch-header* nil) ;; name of the file with this Lisp header (if any)
+(defvar *cl-launch-file* nil) ;; name of the file with the user code (if any)
 (defvar *verbose* nil)
 (defun dump-stream-to-file (i n)
   (with-output-file (o n :if-exists :rename-and-delete) (copy-stream-to-stream i o)))
@@ -2312,18 +2313,17 @@ NIL
   (with-open-file (i f :direction :input :if-does-not-exist :error)
     (temporary-file-from-stream i x)))
 (defun ensure-lisp-file-name (x &optional (name "load.lisp"))
-  (let ((p (pathname x)))
-    (if (equal (pathname-type p) "lisp")
-        p
-        (temporary-file-from-file p name))))
+  (if (equal (pathname-type x) "lisp") x (temporary-file-from-file x name)))
+(defun ensure-lisp-loadable (x)
+  (etypecase x
+    ((eql t) (or *cl-launch-file* (error "Missing CL_LAUNCH_FILE")))
+    ((or stream pathname) x)
+    (string (parse-native-namestring x))))
 (defun ensure-lisp-file (x &optional (name "load.lisp"))
-  (cond
-    ((eq x t)
-     (if (equal *cl-launch-file* "-")
-         (temporary-file-from-stream *standard-input* "load.lisp")
-         (ensure-lisp-file-name *cl-launch-file* name)))
-    ((streamp x) (temporary-file-from-stream x "load.lisp"))
-    (t (ensure-lisp-file-name x name))))
+  (let ((x (ensure-lisp-loadable x)))
+    (etypecase x
+      (stream (temporary-file-from-stream x "load.lisp"))
+      (pathname (ensure-lisp-file-name x name)))))
 (defun cleanup-temporary-files ()
   (loop :for n = (pop *temporary-filenames*)
         :while n :do
@@ -2387,9 +2387,11 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
       (load source :verbose *verbose*)))
   #+(and ecl (not dlopen))
   (load source :verbose *verbose*))
-
 (defun compute-arguments ()
-  (setf *cl-launch-file* (getenvp "CL_LAUNCH_FILE")
+  (setf *cl-launch-file* (let ((x (getenvp "CL_LAUNCH_FILE")))
+                           (if (equal x "-") *standard-input* (parse-native-namestring x)))
+        *cl-launch-header* (let ((x (getenvp "CL_LAUNCH_HEADER")))
+                             (if (equal x "-") *standard-input* (parse-native-namestring x)))
         *verbose* (when (getenvp "CL_LAUNCH_VERBOSE") t)))
 
 (asdf::register-preloaded-system "cl-launch")
@@ -2407,7 +2409,7 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
 ;;; for the --eval statement if needed by ECL...
 (defvar *dependency-counter* 0)
 (defun cl-launch-files ()
-  (when (and *cl-launch-file* (not (equal *cl-launch-file* "-")))
+  (when (pathnamep *cl-launch-file*)
     (list *cl-launch-file*)))
 (defun make-temporary-system (stem rdeps options)
   ;; Make a temporary system with given name stem and options
@@ -2438,23 +2440,25 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
   (let ((name (format nil "build-~D" *dependency-counter*)))
     (incf *dependency-counter*)
     (make-temporary-system name rdeps options)))
-(defun make-dependency (fun arg pkg previous)
+(defun make-dependency (dump fun arg pkg previous)
   ;; Make a dependency, return the new list of dependencies
   (ecase fun
     ((:load)
-     (let ((load-file (ensure-lisp-file arg "load.lisp")))
-       (make-dependency-system previous
-        `(:components ((:cl-source-file-in-package ,(pathname-name load-file)
-                        :package ,pkg
-                        :pathname ,(truename load-file)))))))
+       (let ((x (ensure-lisp-loadable arg)))
+         (if (or (pathnamep x) #+(or ecl mkcl) dump)
+           (let ((load-file (ensure-lisp-file x (format nil "load-~D.lisp" *dependency-counter*))))
+             (make-dependency-system previous
+              `(:components ((:cl-source-file-in-package ,(pathname-name load-file)
+                              :package ,pkg :pathname ,(truename load-file))))))
+           (make-dependency dump :eval `(load* ,x) pkg previous))))
     ((:eval)
-     #-(or ecl mkcl)
-     (make-dependency-system previous
-      `(:components ((:cl-source-code ,(format nil "code-~D" *dependency-counter*)
-                      :code ,arg :package :cl-user))))
-     #+(or ecl mkcl)
-     (with-input (i (temporary-file-from-code i (format nil "build-~D.lisp" *dependency-counter*)))
-       (make-dependency :load i :cl-user previous)))
+     (if (and #+(or ecl mkcl) (not dump))
+       (make-dependency-system previous
+        `(:components ((:cl-source-code ,(format nil "eval-~D" *dependency-counter*)
+                        :code ,arg :package :cl-user))))
+       #+(or ecl mkcl)
+       (with-input (i (temporary-file-from-code arg (format nil "eval-~D.lisp" *dependency-counter*)))
+         (make-dependency :load i :cl-user previous))))
     ((:require)
      (cons `(:require ,arg) previous))
     ((:load-system)
@@ -2471,10 +2475,9 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
                 (loop :with r = ()
                       :for (fun arg pkg) :in
                       `((:load-system "asdf")
-                        ,@(when dump
-                            #+(or ecl mkcl)
-                            (let ((header
-                                    (or (current-lisp-file-pathname) (getenvp "CL_LAUNCH_HEADER"))))
+                        ,@(when dump ;; do we still want to include cl-launch in the dumped code,
+                            #+(or ecl mkcl) ;; now that all the relevant runtime support is in UIOP?
+                            (let ((header *cl-launch-header*)) ;; maybe for dependency timestamp?
                               (setf *features* (remove :cl-launch *features*))
                               `(:load ,(ensure-lisp-file header "header.lisp") :cl-user)))
                         ,@build
@@ -2488,7 +2491,7 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
                                    *image-postlude* ,final
                                    *lisp-interaction* ,(not quit))))
                            `(:eval ,footer :cl-user)))
-                      :do (setf r (make-dependency fun arg pkg r))
+                      :do (setf r (make-dependency dump fun arg pkg r))
                       :finally (return r)))
               (program-sys
                 (make-temporary-system
