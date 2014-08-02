@@ -1,26 +1,860 @@
-.\" Hey, Emacs!  This is an -*- nroff -*- source file.
-.TH CL-LAUNCH 1 "Marc 1st, 2014"
-.SH NAME
-CL-Launch \- Common Lisp program launcher and shell script generator
-.SH DESCRIPTION
-.B CL-Launch
-provides a uniform way to invoke Common Lisp code from the shell
-or to generate ecoxecutable shell scripts from Common Lisp source code,
-independently from the underlying Common Lisp implementation.
+.TH cl\-launch.sh 4.0.8.1 "(August 2014)" "Francois\-Rene Rideau's" "shell wrapper for Common Lisp"
+.SH Name
 .PP
-Currently supported implementations are:
-SBCL, Clozure CL, GNU CLISP, CMUCL, ECL, ABCL, XCL, SCL, Allegro, LispWorks Pro, GCL.
-.PP
-You can specify complex Lisp systems using ASDF 3.
-cl-launch will leverage ASDF 3's per-user, per-implementation fasl cache.
-It can dump precompiled images and resume from them, for fast software startup.
-.PP
-cl-launch contains its own complete documentation.
-You can view it all using the following command:
+cl\-launch \- shell wrapper for Common Lisp
+.SH Normal Usage
 .PP
 .RS
 .nf
-\fBcl-launch \-\-more-help | less\fP
+cl [options] '(lisp (form) to evaluate)'
+    evaluate specified form, print the results followed by newline
+    as in: cl \-l sbcl \-sp my\-system\-and\-package '(some form)'
+cl [options] script\-file arguments...
+    run specified Lisp script, passing arguments, as in a script with
+    #!/usr/bin/cl \-sp my\-system\-and\-package \-E main
+cl [options] \-\-execute [options] [\-\- arguments...]
+    run the specified software without generating a script (default)
+cl [options] \-\-output SCRIPT [options]
+    generate a runnable shell script from the software specification
+.fi
+.RE
+.SH Special modes
+.PP
+.RS
+.nf
+\-h  or  \-?  \-\-help           display a short help message
+\-H          \-\-more\-help      show complete help (you may use a $PAGER)
+\-V          \-\-version        display cl\-launch version and configuration
+\-u FILE     \-\-update FILE    update a cl\-launch script to current version
+.fi
+.RE
+.SH Software specification
+.PP
+.RS
+.nf
+\-w CODE     \-\-wrap CODE          shell wrapper CODE to run in cl\-launch
+\-l LISP...  \-\-lisp LISP...       try use these LISP implementations
+\-m IMAGE    \-\-image IMAGE        build from Lisp image IMAGE
+\-f FILE     \-\-file FILE          include lisp FILE while building
+\-L FILE     \-\-load FILE          load lisp FILE while building
+\-S X        \-\-source\-registry X  override source registry of asdf systems
+\-s SYSTEM   \-\-system SYSTEM      load asdf SYSTEM while building
+            \-\-load\-system SYSTEM same as above (buildapp compatibility)
+\-p PACKAGE  \-\-package PACKAGE    change current package to PACKAGE
+\-sp SP      \-\-system\-package SP  combination of \-s SP and \-p SP
+\-e FORM     \-\-eval FORM          evaluate FORM while building
+            \-\-require MODULE     require MODULE while building
+\-r FUNC     \-\-restart FUNC       restart from build by calling (FUNC)
+\-E FUNC     \-\-entry FUNC         restart from build by calling (FUNC argv)
+\-i FORM     \-\-init FORM          evaluate FORM after restart
+\-ip FORM    \-\-print FORM         evaluate and princ FORM after restart
+\-iw FORM    \-\-write FORM         evaluate and write FORM after restart
+\-F FORM     \-\-final FORM         evaluate FORM before dumping IMAGE
+\-I PATH     \-\-include PATH       runtime PATH to cl\-launch installation
++I          \-\-no\-include         disable cl\-launch installation feature
+\-R          \-\-rc                 try read /etc/cl\-launchrc, ~/.cl\-launchrc
++R          \-\-no\-rc              skip /etc/cl\-launchrc, ~/.cl\-launchrc
+\-Q          \-\-quicklisp          use quicklisp (see \-\-more\-help)
++Q          \-\-no\-quicklisp       do not use quicklisp
+\-b          \-\-clbuild            use clbuild (see \-\-more\-help)
++b          \-\-no\-clbuild         do not use clbuild
+\-v          \-\-verbose            be quite noisy while building
+\-q          \-\-quiet              be quite quiet while building (default)
+.fi
+.RE
+.SH Output options
+.PP
+.RS
+.nf
+\-x   \-o !   \-\-execute            run the specified software NOW (default)
+\-o FILE     \-\-output FILE        create executable FILE
+\-d IMAGE    \-\-dump IMAGE         dump IMAGE for faster startup
+\-X ... \-\-   (see more help)      use #!/.../cl\-launch as script interpreter
+\-\-          \-\-                   end of arguments when using \-x or \-X
+.fi
+.RE
+.SH Invocation of \fB\fCcl\-launch\fR
+.PP
+\fB\fCcl\-launch\fR will evaluate Common Lisp code or create shell scripts or
+executable binaries that evaluate Common Lisp code. cl\-launch follows
+the invocation conventions of both Unix script interpreters
+and Common Lisp implementations.
+.PP
+A suggested short\-hand name for \fB\fCcl\-launch\fR is \fB\fCcl\fR (you may create a
+symlink if it isn't included in your operating system's \fB\fCcl\-launch\fR package).
+We'd like to homestead the path \fB\fC/usr/bin/cl\fR while we can, so that
+script authors can reasonably expect a script to work when it starts with:
+        \fB\fC#!/usr/bin/cl\fR
+(See \fISimple cl\-launch scripts\fP below for caveats with \fB\fC#!\fR scripts though.)
+Recent Linux kernels support a script interpreter itself being a script;
+BSD kernels don't and require a small C program cl\-shim to be compiled and
+installed as /usr/bin/cl to use cl\-launch this way.
+.PP
+To work properly, \fB\fCcl\-launch\fR 4.0.8 depends on \fB\fCASDF\fR 3.0.1 or later, and
+on its portability layer \fB\fCUIOP\fR, to manage compilation and image life cycle.
+.PP
+The software is specified as the evaluation of code in several phases;
+the distinction matters most for creating executable binaries,
+but understanding the evaluation model can avoid surprises in other cases too.
+.PP
+In the first phase, the Lisp image is initialized:
+.RS
+.IP \(bu 2
+optionally having your Lisp start from a Lisp \fB\fCIMAGE\fR
+(option \fB\fC\-I \-\-image\fR)
+.IP \(bu 2
+loading a small header of code that provides common \fB\fCcl\-launch\fR functionality
+.IP \(bu 2
+loading \fB\fCASDF3\fR\&.
+The \fB\fCcl\-launch\fR header will try hard to load \fB\fCASDF 3.0.1\fR or later.
+If your implementation does not provide it via \fB\fC(require "asdf")\fR,
+you can configure your implementation's \fB\fCASDF\fR (if any) to find it.
+Or you can put it in your home, under \fB\fC~/common\-lip/asdf/\fR
+and \fB\fCcl\-launch\fR will find it.
+Or it may be installed in \fB\fC/usr/share/common\-lisp/source/cl\-asdf/\fR
+in which case \fB\fCcl\-launch\fR will also find it.
+Failing any of the above, \fB\fCcl\-launch\fR will be unable to proceed.
+.IP \(bu 2
+optionally loading quicklisp
+\[la]http://beta.quicklisp.org/\[ra]
+(option \fB\fC\-Q \-\-quicklisp\fR)
+.RE
+.PP
+In a second phase, your software is built, based on the following options,
+in order of appearance:
+.RS
+.IP \(bu 2
+evaluating one or several \fB\fCFORMS\fR (option \fB\fC\-e \-\-eval\fR)
+in the current package. The series of forms is evaluated
+as by \fB\fCLOAD\fR, in a context where the \fB\fC*package*\fR
+has been set to the current package (see below explanations on packages).
+.IP \(bu 2
+compiling a \fB\fCFILE\fR and load the fasl (option \fB\fC\-L \-\-load\fR)
+Files are loaded with \fB\fC*package*\fR bound to the current package (see below).
+.IP \(bu 2
+including a \fB\fCFILE\fR, compiling it and loading the fasl (option \fB\fC\-f \-\-file\fR)
+The contents of the \fB\fCFILE\fR, which will have be included in the output script,
+will be compiled and the fasl loaded as if by option \fB\fC\-L \-\-load\fR\&.
+The difference matters mostly when creating an output script,
+as opposed to executing the code immediately or dumping an image.
+Only one file may be specified this way.
+If a filename specified with \fB\fC\-f \-\-file\fR is \fB\fC\-\fR (after stripping quotes),
+then the standard input is used. You may thus concatenate several files
+and feed them to \fB\fCcl\-launch\fR through a pipe.
+To use a file named \fB\fC\-\fR, pass the argument \fB\fC\&./\-\fR
+(same trick as for \fB\fCcat\fR and other Unix commands).
+.IP \(bu 2
+A script file, as specified by \fB\fC\-X ... \-\-\fR or by use of \fB\fC#!\fR
+or by following options with an immediate filename that does not start with
+\fB\fC(\fR or \fB\fC\-\fR, counts as if preceded by \fB\fC\-\-package cl\-user \-\-load\fR
+and followed by \fB\fC\-\-execute \-\-\fR
+.IP \(bu 2
+requiring an implementation\-provided \fB\fCMODULE\fR (option \fB\fC\-\-require\fR)
+.IP \(bu 2
+having \fB\fCASDF3\fR compile and load a \fB\fCSYSTEM\fR
+(option \fB\fC\-s \-\-system \-\-load\-system\fR).
+Option \fB\fC\-sp \-\-system\-package\fR loads the \fB\fCSYSTEM\fR like \fB\fC\-s \-\-system\fR
+and also changes the current \fB\fC*package*\fR like \fB\fC\-p \-\-package\fR
+(see below on packages).
+.IP \(bu 2
+optionally having your Lisp \fB\fCDUMP\fR an image to restart from
+(option \fB\fC\-d \-\-dump\fR), and just before
+evaluating one or several \fB\fCFINAL\fR forms (option \fB\fC\-F \-\-final\fR).
+See section \fIDumping images\fP\&.
+.RE
+.PP
+If you are creating a shell script with option \fB\fC\-o \-\-output\fR but
+without using option \fB\fC\-d \-\-dump\fR, then these first two phases only happen
+when the script is invoked. If you are using option \fB\fC\-d \-\-dump\fR,
+then these two phases happen immediately, and
+no compilation happen when invoking the output.
+Note that compiled files are cached, so that the compilation only happens
+the first time a file is loaded via \fB\fC\-\-load of \-\-system\fR,
+or if the source file has been modified.
+This may cause slower startup the first time over.
+The cache is controlled by \fB\fCASDF\fR\&'s \fB\fCoutput\-translations\fR mechanism.
+See your \fB\fCASDF\fR manual regarding the configuration of this cache,
+which is typically under \fB\fC~/.cache/common\-lisp/\fR
+.PP
+In a third phase, your software is run via \fB\fCUIOP:RESTORE\-IMAGE\fR\&.
+This happens immediately if using option \fB\fC\-x \-\-execute\fR or
+calling \fB\fCcl\-launch\fR as a Unix interpreter on a script e.g. via \fB\fC#!\fR;
+or it can happen later if you use option \fB\fC\-o \-\-output\fR in combination
+with (or without) option \fB\fC\-d \-\-dump\fR to dump an image (which gives you faster
+startup and single\-file or double\-file delivery, at the expense of disk space),
+at which point it happens when you invoke the executable output file:
+.RS
+.IP \(bu 2
+Hooks from \fB\fCASDF3\fR\&'s \fB\fCUIOP:*IMAGE\-RESTORE\-HOOK*\fR are called
+(in FIFO order).
+.IP \(bu 2
+a series of \fB\fCFORMS\fR specified via options \fB\fC\-i \-\-init\fR,
+\fB\fC\-ip \-\-print\fR, \fB\fC\-iw \-\-write\fR, stored as a text string,
+are read and evaluated in order of appearance, each in the context
+of the package that was current at the time it was requested.
+(Concatenated together with separating whitespace, these forms constitute
+the \fB\fCUIOP:*IMAGE\-PRELUDE*\fR as handled by \fB\fCRESTORE\-IMAGE\fR).
+Arguments that start with an open parenthesis are assumed to be \fB\fCFORMS\fR
+that follow an implicit \fB\fC\-\-print\fR\&.
+Loading from a stream means you don't have to worry about nasty read\-time
+issues; forms will be read by the fully built Lisp image; however it also
+means that if you care a lot about the very last drop of startup delay when
+invoking a dumped image, you'll only use option \fB\fC\-r \-\-restart\fR
+or \fB\fC\-E \-\-entry\fR and avoid using \fB\fC\-\-init\fR and its variants.
+Option \fB\fC\-ip \-\-print\fR specifies \fB\fCFORMS\fR such that the result of
+the last form will be printed as if by \fB\fCPRINC\fR, followed by a newline.
+Option \fB\fC\-iw \-\-write\fR is similar to \fB\fC\-\-print\fR,
+using \fB\fCWRITE\fR instead of \fB\fCPRINC\fR\&.
+.IP \(bu 2
+An optional \fB\fCFUNCTION\fR provided option \fB\fC\-r \-\-restart\fR or \fB\fC\-E \-\-entry\fR
+is invoked. If the function was provided with option \fB\fC\-r \-\-restart\fR
+(compatible with earlier versions of \fB\fCcl\-launch\fR),
+it will be called with no argument. If it was provided with
+option \fB\fC\-E \-\-entry\fR (compatible with \fB\fCbuildapp\fR), it will be called
+with one argument, being the list of arguments passed to the program,
+not including \fB\fCargv[0]\fR, which is available on most implementations via the
+function \fB\fCuiop:argv0\fR (available in \fB\fCASDF\fR 3.1.2 and later).
+Using either option, the argument may be a function name
+or a lambda expression, that is read from the current package
+(see below option \fB\fC\-p \-\-package\fR and \fB\fC\-sp \-\-system\-package\fR).
+Only one restart or entry function may be specified;
+if multiple are provided, the last one provided overrides previous ones.
+If you want several functions to be called, you may \fB\fCDEFUN\fR one that calls
+them and use it as a restart, or you may use multiple init forms as below.
+.IP \(bu 2
+If neither restart nor entry function is provided, the program will exit with
+status \fB\fC0\fR (success). If a function was provided, the program will exit
+after the function returns (if it returns), with status \fB\fC0\fR if and only if
+the primary return value of result is generalized boolean true, and
+with status 1 if this value is \fB\fCNIL\fR\&.
+See documentation for \fB\fCUIOP:RESTORE\-IMAGE\fR for details.
+.RE
+.PP
+The current package can be controlled by option \fB\fC\-p \-\-package\fR and its variant
+\fB\fC\-sp \-\-system\-package\fR that also behaves like \fB\fC\-s \-\-system\fR\&.
+All forms passed to \fB\fC\-\-eval\fR, \fB\fC\-\-init\fR, \fB\fC\-\-print\fR, \fB\fC\-\-write\fR,
+\fB\fC\-\-final\fR, \fB\fC\-\-restart\fR, \fB\fC\-\-entry\fR, etc., are read in the current package.
+Files specified with \fB\fC\-f \-\-file \-\-load\fR are read in the current package.
+Current means the package specified by the latest option \fB\fC\-p \-\-package\fR or
+\fB\fC\-sp \-\-system\-package\fR preceding the option being processed,
+or \fB\fCcl\-user\fR if there was none.
+Note that multiple \fB\fC\-i \-\-init\fR or \fB\fC\-F \-\-final\fR forms
+may be evaluated consecutively after a package has been changed, and that
+if one of these form itself modifies the package, or some other syntax control
+mechanism such as the reader, it may adversely affect later forms in the same
+category, but not those in other categories (if reached).
+.PP
+General note on \fB\fCcl\-launch\fR invocation:
+options are processed from left to right;
+usually, repeated options accumulate their effects,
+with the earlier instances taking effect before latter instances.
+In case of conflicting or redundant options, the latter override the former.
+.PP
+\fB\fCcl\-launch\fR defines a package \fB\fCcl\-launch\fR that exports the following symbol:
+   \fB\fCcompile\-and\-load\-file\fR
+Runtime functionality formerly provided by \fB\fCcl\-launch\fR
+is now provided by \fB\fCUIOP\fR, the portability layer provided by \fB\fCASDF3\fR\&.
+See below section \fIcl\-launch runtime API\fP\&.
+.PP
+When the first non\-recognized option is a filename, \fB\fCcl\-launch\fR will try to
+load this filename as a script, as if by \fB\fC\-\-load\fR,
+then execute it immediately as if by \fB\fC\-\-execute \-\-\fR,
+with the rest of the command line passed as arguments.
+The file name may not start with the character \fB\fC\-\fR or a \fB\fC(\fR \-\-\-
+To use a file with one of these (or something unknown) as a first character,
+prepend \fB\fC\&./\fR to the filename. Note that it is a security risk to let
+adversaries control the names of files passed to cl\-launch or other commands.
+.PP
+When option \fB\fC\-\-execute\fR is specified, the specified software is executed.
+Command\-line arguments may be given to software being executed by putting
+them after a special marker \fB\fC\-\-\fR, that ends \fB\fCcl\-launch\fR option processing.
+.PP
+When option \fB\fC\-\-output FILE\fR is used, code will be generated
+into the specified \fB\fCFILE\fR\&. The output file itself
+will be created atomically from complete generated contents
+and may thus have the same pathname as the input file.
+The restart function and init forms will not be evaluated, but kept for
+when the output file is executed.
+If \fB\fC\-\fR (after quoting) is specified, then the standard output is used.
+If \fB\fC!\fR (after quoting) is specified, then option \fB\fC\-\-execute\fR is assumed.
+.PP
+When no \fB\fC\-\-output\fR file is specified,
+option \fB\fC\-\-execute\fR is implicitly assumed.
+The last \fB\fC\-\-output\fR or \fB\fC\-\-execute\fR option
+takes precedence over the previous ones.
+.PP
+If only one argument exists and it doesn't start with \fB\fC\-\fR
+then the argument is considered as if given to option \fB\fC\-ip\fR,
+to be evaluated and printed immediately.
+.PP
+The \fB\fCASDF3\fR source\-registry configuration can be overridden with option
+\fB\fC\-\-source\-registry SOURCE_REGISTRY\fR\&. The provided configuration will take
+priority over anything provided by the environment or configuration files,
+though it may inherit from them as usual. See the \fB\fCASDF3\fR manual about that.
+.PP
+Options \fB\fC\-l \-\-lisp\fR and \fB\fC\-w \-\-wrap\fR may be used to control the way that
+a Common Lisp implementation is found when the software is run.
+Option \fB\fC\-l \-\-lisp\fR specifies the list of implementations to try to use;
+the list is whitespace\-separated, and consists in
+nicknames recognized by \fB\fCcl\-launch\fR\&.
+Option \fB\fC\-w \-\-wrap\fR supplies arbitrary code to be evaluated
+by the shell wrapper, after it has read its configuration
+and defined its internal functions, but before it tries
+to find and run a Lisp implementation. Such wrapper code is typically used to
+modify the variables that control the run\-time behaviour of generated scripts,
+as documented below. Use of other internals of \fB\fCcl\-launch\fR is possible,
+but not supported, which means that it is your responsibility to keep a copy
+of the specific version of cl\-launch with which your code works and to
+update your code if you later make an upgrade to an incompatible \fB\fCcl\-launch\fR\&.
+For instance, \fB\fC\-\-lisp "foo bar"\fR is equivalent
+to \fB\fC\-\-wrap 'LISPS="foo bar"'\fR\&.
+See below the documentation section on \fILisp implementation invocation\fP\&.
+.PP
+Option \fB\fC\-\-no\-include\fR specifies that cl\-launch should generate a standalone
+script that includes the configuration, shell wrapper, Lisp header, and
+user\-provided Lisp code (from \fB\fC\-\-file\fR). If you can rely on the presence of
+a recent Lisp implementation that provides \fB\fCASDF\fR, then the script is pretty
+much standalone indeed and may be moved around the filesystem and still used.
+However the size of the output will be the size of the user Lisp code
+plus about 36KiB.
+.PP
+Option \fB\fC\-\-include PATH\fR specifies that \fB\fCcl\-launch\fR should generate
+a very small script (typically under 1KiB) that when run
+will read the \fB\fCcl\-launch\fR shell wrapper and Lisp header
+from a specified installation directory \fB\fCPATH\fR\&.
+Also, if option \fB\fC\-\-include\fR is used, and
+Lisp code is specified with \fB\fC\-\-file\fR
+and an absolute pathname starting with \fB\fC/\fR as opposed to a relative pathname
+or to the standard input, then Lisp code will also be loaded from the specified
+location at runtime rather than embedded into the script at generation time.
+This option generates leaner scripts, but may not be applicable when
+the very same script is to used in a variety of situations
+that lack common coherent filesystem management.
+.PP
+Which of \fB\fC\-\-include\fR or \fB\fC\-\-no\-include\fR is the default
+may depend on your cl\-launch installation.
+The version of \fB\fCcl\-launch\fR distributed by the author
+uses \fB\fC\-\-no\-include\fR by default, but
+the version of \fB\fCcl\-launch\fR available in your operating system distribution may
+rely on a well\-managed include path (this is the case with debian for instance).
+You may query the configuration of an instance of \fB\fCcl\-launch\fR
+with option \fB\fC\-\-version\fR\&.
+.PP
+For instance, one may expect a debian version of cl\-launch to use:
+        \fB\fC/usr/share/common\-lisp/source/cl\-launch/\fR
+as a system\-managed include path. One may also expect that Lisp implementations
+managed by the system would come with \fB\fCcl\-launch\fR precompiled in Lisp images.
+Since \fB\fCcl\-launch\fR provides feature \fB\fC:cl\-launch\fR,
+and since the \fB\fCcl\-launch\fR Lisp header is conditionalized to not be read
+with this feature, this would make \fB\fCcl\-launch\fR startup faster,
+while still allowing non\-system\-managed Lisp implementations to run fine.
+.PP
+You may create an installation of cl\-launch with such a command as:
+.PP
+.RS
+.nf
+    cl\-launch \-\-include /usr/share/common\-lisp/source/cl\-launch \\
+            \-\-lisp 'sbcl ccl clisp' \\
+            \-\-rc \\
+            \-\-output /usr/bin/cl\-launch \-B install
 .fi
 .RE
 .PP
+You can use command \fB\fC\-B install_bin\fR if you only want to configure cl\-launch
+(with a different default for \fB\fC\-\-lisp\fR but no \fB\fC\-\-include\fR, for instance),
+and command \fB\fC\-B install_path\fR if you only want to create support files.
+Note that the \fB\fC\-\-backdoor\fR option \fB\fC\-B\fR must come last in your invocation.
+.PP
+Option \fB\fC+R \-\-no\-rc\fR specifies that \fB\fCcl\-launch\fR should not try to
+read resource files \fB\fC/etc/cl\-launchrc\fR and \fB\fC~/.cl\-launchrc\fR\&.
+.PP
+Option \fB\fC\-R \-\-rc\fR specifies that cl\-launch should try to read resource
+files \fB\fC/etc/cl\-launchrc\fR and \fB\fC~/.cl\-launchrc\fR\&.
+These files are notably useful to define override the value of \fB\fC$LISP\fR
+depending on \fB\fC$SOFTWARE_SYSTEM\fR\&. A shell function \fB\fCsystem_preferred_lisps\fR
+is provided so that your \fB\fCcl\-launchrc\fR might contain lines as follows:
+.PP
+.RS
+.nf
+    system_preferred_lisps stumpwm cmucl sbcl clisp
+    system_preferred_lisps exscribe clisp cmucl sbcl
+.fi
+.RE
+.PP
+Beware that for the sake of parsing option \fB\fC\-\-no\-rc\fR, the resource files
+are run \fIafter\fP options are processed, and that
+any overriding of internal variables will thus preempt user\-specified options.
+A warning will be printed on the standard error output
+when such an override happens.
+Note that such overrides only happen at script\-creation time.
+A script created by \fB\fCcl\-launch\fR
+will not try to read the \fB\fCcl\-launch\fR resource files.
+.PP
+Option \fB\fC+Q \-\-no\-quicklisp\fR specifies that \fB\fCcl\-launch\fR
+should not use \fB\fCquicklisp\fR\&.
+Option \fB\fC\-Q \-\-quicklisp\fR specifies that \fB\fCcl\-launch\fR should use \fB\fCquicklisp\fR\&.
+Which is the default depends on your installation.
+The default default is \fB\fC+Q\fR\&.
+Quicklisp is loaded from \fB\fC~/quicklisp/setup.lisp\fR if available,
+or else \fB\fC~/.quicklisp/setup.lisp\fR\&.
+.PP
+Option \fB\fC\-b \-\-clbuild\fR specifies that \fB\fCcl\-launch\fR should rely
+on \fB\fCclbuild\fR to find and invoke the Common Lisp implementation.
+Option \fB\fC+b \-\-no\-clbuild\fR specifies that \fB\fCcl\-launch\fR should not rely
+on \fB\fCclbuild\fR to find and invoke the Common Lisp implementation.
+Which is the default depends on your installation.
+The default default is \fB\fC+b\fR\&.
+.PP
+Files generated by \fB\fCcl\-launch\fR are made of several well\-identifiable sections.
+These sections may thus be considered as distinct software, each available
+under its own regime of intellectual property (if any). In case of an accident,
+you may still retrieve the exact original code provided with option \fB\fC\-\-file\fR
+by stripping the wrapper, as delimited by well\-identified markers.
+Search for the marker string \fB\fC"BEGINS HERE:"\fR\&.
+Everything after it is not \fB\fCcl\-launch\fR\&.
+This can be done automatically with backdoor option \fB\fC\-B extract_lisp_content\fR\&.
+\fB\fCcl\-launch\fR uses this functionality implicitly when embedding a file specified
+with the option \fB\fC\-\-file\fR, so that you may process
+a script previously generated by \fB\fCcl\-launch\fR and change the options
+with which it wraps the embedded Lisp code into runnable software.
+.PP
+As an alternative, you may also upgrade a previously generated script to use
+the current version of \fB\fCcl\-launch\fR while preserving
+its original wrapping options with option \fB\fC\-\-update\fR\&.
+In this case, software specification options are ignored.
+Output options still apply. Specifying \fB\fC\-\fR (after quoting) as the file to
+update means to read the contents to be read from the standard input.
+This feature might not work with scripts generated by very early versions
+of the \fB\fCcl\-launch\fR utility. It should work with versions later than 1.47.
+.SH Supported Lisp implementations
+.PP
+The implementations supported by current version of cl\-launch are:
+.PP
+.RS
+.nf
+    abcl allegro ccl clisp cmucl ecl gcl lispworks sbcl scl xcl
+.fi
+.RE
+.PP
+Also defined are aliases:
+.PP
+.RS
+.nf
+    clozurecl gclcvs lisp openmcl
+.fi
+.RE
+.PP
+which are name variations for \fB\fCccl\fR, \fB\fCgcl\fR, \fB\fCcmucl\fR and \fB\fCccl\fR
+again respectively.
+.PP
+Fully supported, including standalone executables:
+.PP
+.RS
+.nf
+sbcl:  SBCL 1.2.2
+clisp:  GNU CLISP 2.49
+ecl:  ECL 13.5.1
+cmucl:  CMUCL 20D
+ccl:  ClozureCL 1.10
+lispworks:  LispWorks Professional 6.1.0  (no personal ed, banner)
+.fi
+.RE
+.PP
+Fully supported, but no standalone executables:
+.PP
+.RS
+.nf
+gcl (GCL 2.7):  GCL 2.7.0 ansi mode  (get a very recent git checkout)
+allegro:  Allegro 9.0  (also used to work with 5)
+scl:  Scieneer CL 1.3.9
+.fi
+.RE
+.PP
+Incomplete support:
+.PP
+.RS
+.nf
+abcl:  ABCL 1.3.1 (no image dumping support, but you may use abcl\-jar)
+xcl:  XCL 0.0.0.291 (cannot dump an image) (get a recent checkout)
+.fi
+.RE
+.PP
+\fB\fCGCL\fR is only supported in ANSI mode. \fB\fCcl\-launch\fR does export GCL_ANSI=t
+in the hope that the \fB\fCgcl\fR wrapper script does the right thing
+as it does in Debian. Also \fB\fCASDF3\fR requires a very recent \fB\fCGCL 2.7\fR\&.
+Note that \fB\fCGCL\fR seems to not be very actively maintained anymore.
+.PP
+There are some issues regarding standalone executables on \fB\fCCLISP\fR\&.
+See below in the section regarding \fIStandalone executables\fP\&.
+.PP
+\fB\fCLispWorks\fR requires the Professional Edition.
+Personal edition isn't supported as it won't let you
+control the command line or dump images.
+Dumped images will print a banner, unless you dump a standalone executable.
+To dump an image, make sure you have a license file in your target directory
+(or use a trampoline shell script to \fB\fCexec /path/to/lispworks "$@"\fR),
+create a build script with:
+.PP
+.RS
+.nf
+   echo '(hcl:save\-image "lispworks" :environment nil)' > si.lisp
+   lispworks\-6\-1\-0\-x86\-linux \-siteinit \- \-init \- \-build si.lisp
+.fi
+.RE
+.PP
+LispWorks also requires that you have \fB\fCASDF 3.1.2\fR or later;
+make sure you have it installed and configured in your source registry.
+.PP
+Similarly, a mlisp image for allegro can be created as follows:
+.PP
+.RS
+.nf
+    alisp \-e '(progn
+               (build\-lisp\-image "sys:mlisp.dxl"
+                :case\-mode :case\-sensitive\-lower
+                :include\-ide nil :restart\-app\-function nil)
+               (when (probe\-file "sys:mlisp") (delete\-file "sys:mlisp"))
+               (sys:copy\-file "sys:alisp" "sys:mlisp"))'
+.fi
+.RE
+.PP
+Additionally, \fB\fCcl\-launch\fR supports the use of \fB\fCclbuild\fR as a wrapper
+to invoke the Lisp implementation, with the \fB\fC\-\-clbuild\fR option.
+.SH Supported shells
+.PP
+\fB\fCcl\-launch\fR was tested with all of
+\fB\fCposh\fR 0.4.7, \fB\fCbash\fR 2.05, \fB\fCbash\fR 3.1, \fB\fCzsh\fR 4.3.2,
+\fB\fCdash\fR 0.5.3 and \fB\fCbusybox\fR 1.01 \fB\fCash\fR\&.
+.SH Lisp implementation invocation
+.PP
+When a \fB\fCcl\-launch\fR generated script is invoked,
+the \fB\fCcl\-launch\fR shell wrapper will try to execute the Lisp code
+with the first Common Lisp implementation it finds in a given list,
+which can be specified through option \fB\fC\-\-lisp\fR\&.
+The runtime behaviour of the \fB\fCcl\-launch\fR shell wrapper
+is very configurable through a series of environment variables.
+These variables can be controlled by the user
+by exporting them in his environment, or
+they can be restricted at the time of script generation
+by using cl\-launch option \fB\fC\-\-wrap\fR\&.
+.PP
+If variable \fB\fCLISP\fR is defined, the shell wrapper will first try
+the implementation named by variable \fB\fCLISP\fR\&. If that fails,
+it will try the list of implementations provided at script generation time.
+The list of implementations generated will be
+the argument to option \fB\fC\-\-lisp\fR if specified.
+Otherwise, \fB\fCcl\-launch\fR will supply its default value.
+This default value for the current instance of \fB\fCcl\-launch\fR is:
+.PP
+.RS
+.nf
+    sbcl ccl clisp abcl allegro lispworks scl cmucl ecl mkcl gcl xcl
+.fi
+.RE
+.PP
+This \fB\fCLISP\fR selection only happens at system preparation time.
+If you dump an image then the script will always use the Lisp implementation
+for which an image was dumped.
+If you don't then the user may override the implementation.
+.PP
+Note that these are nicknames built into the \fB\fCcl\-launch\fR shell wrapper,
+and not necessarily names of actual binary. You may control the mapping of
+implementation nickname to actual binary pathname to call with an environment
+variable. For a given implementation nickname, the environment variable will be
+the capitalization of the given nickname.
+Hence, variable \fB\fC$SBCL\fR controls where to look for the \fB\fCsbcl\fR implementation,
+and variable \fB\fC$CMUCL\fR controls where to look for the \fB\fCcmucl\fR implementation.
+If a binary is found with a matching pathname (using the standard unix \fB\fC$PATH\fR
+as required), then said implementation will be used, using proper command line
+options, that may be overriden with an environment variable similar to the previous
+but with \fB\fC_OPTIONS\fR appended to its name.
+Hence, \fB\fC$CMUCL_OPTIONS\fR for \fB\fCcmucl\fR, \fB\fC$CLISP_OPTIONS\fR for \fB\fCclisp\fR, etc.
+Sensible defaults are provided for each implementation, so as to execute the
+software in non\-interactive mode, with debugger disabled, without reading
+user\-specific configuration files, etc.
+.PP
+If you want to insist on using a given implementation with given options,
+you may use option \fB\fC\-\-lisp\fR and \fB\fC\-\-wrap\fR, as follows:
+.PP
+.RS
+.nf
+\-\-lisp 'sbcl clisp' \-\-wrap '
+    LISP= # do not allow the user to specify his implementation
+    SBCL=/usr/bin/sbcl # not any experimental thing by the user
+    SBCL_OPTIONS="\-\-noinform \-\-sysinit /dev/null \-\-userinit /dev/null \\
+    \-\-disable\-debugger" # predictable Lisp state
+    CLISP=/usr/bin/clisp # fall back on machines that lack SBCL
+    CLISP_OPTIONS=" \-norc \-\-quiet \-\-quiet"
+    # configure ASDF:
+    CL_SOURCE_REGISTRY=/usr/local/share/common\-lisp/source//:
+    # assuming precompiled fasls there:
+    ASDF_OUTPUT_TRANSLATIONS=/my/cl/src:/my/fasl/cache:
+    '
+.fi
+.RE
+.PP
+If you dump an image, you need not unset the \fB\fCLISP\fR variable, but you
+might still want to override any user\-specified \fB\fCSBCL\fR and \fB\fCSBCL_OPTIONS\fR
+(or corresponding variables for your selected implementation) from what
+the user may specify.
+.PP
+Note that you can use option \fB\fC\-\-wrap "$(cat your_script)"\fR
+to embed into your program a full fledged script from a file.
+Your script may do arbitrary computations before the shell wrapper is run.
+It may make some consistency checks and abort before to run Lisp.
+Or it may analyze invocation arguments and make according adjustments
+to Lisp implementation options. This can be useful for setting options
+that cannot be set from the Lisp code, such the path to a runtime image,
+interactive or non\-interactive execution, size of heaps,
+locale settings for source file encoding, etc.
+.PP
+Reading the source code of \fB\fCcl\-launch\fR can be completely crazy.
+You may have great fun understanding why things are how they are
+and adding features without breaking anything! However,
+adding support for a new CL implementation should be straightforward enough:
+just search the sources for \fB\fCclisp\fR or \fB\fCsbcl\fR and mimic what I did for them.
+Be sure to send me what will get your favorite Lisp flavor of the month rolling.
+.SH Limited clbuild support
+.PP
+\fB\fCcl\-launch\fR 2.12 and later support using \fB\fCclbuild\fR as a wrapper
+to configure your Lisp implementation, with option \fB\fC\-\-clbuild\fR
+(which can be disabled with option \fB\fC\-\-no\-clbuild\fR if it was enabled by default
+in your \fB\fCcl\-launch\fR installation).
+.PP
+Note that when you use \fB\fCclbuild\fR, you can no longer override implementation
+options with say \fB\fCSBCL_OPTIONS\fR, as clbuild takes care of the options for you.
+Any implementation banner will not be removed unless you instruct clbuild
+to do so. Also, you cannot use clbuild with a non\-executable image different
+from \fB\fCclbuild\fR\&'s, which precludes image dumping with \fB\fCcmucl\fR or \fB\fCallegro\fR
+(\fB\fCallegro\fR could probably be updated, but I don't have a recent licence
+to test and develop).
+.PP
+\fB\fCclbuild\fR support is not fully tested at this point. Please report any bug.
+.SH Simple cl\-launch scripts
+.PP
+In simple cases, you may create a Common Lisp shell script with \fB\fCcl\-launch\fR
+without a script generation step, just because you'll spend a lot of time
+editing the script and distributing it, and little time waiting for script
+startup time anyway. This notably is a good idea if you're not spawning many
+instances of the same version of a script on a given computer. If that's
+what you want, you may use \fB\fCcl\-launch\fR as a script interpret the following way
+(stripping leading spaces):
+.PP
+.RS
+.nf
+#!/path/to/cl\-launch ...options...
+.fi
+.RE
+.PP
+For instance, you may write the following script (stripping leading spaces):
+.PP
+.RS
+.nf
+#!/usr/bin/cl \-\-entry main
+(defun main (argv)
+  (format t "Hello, World!~%~S~%" argv))
+.fi
+.RE
+.PP
+On a recent Linux kernel, the options may include spaces, parentheses, etc.,
+provided they are quoted as in a shell script.
+Also, using \fB\fC\-X\fR as your very first option and \fB\fC\-\-\fR as your last
+will ensure that the script works even if its name starts with
+a \fB\fC(\fR or a \fB\fC\-\fR, in addition to working with older versions of \fB\fCcl\-launch\fR\&.
+.PP
+Note however that Darwin (MacOS X) and other BSD kernels or old Linux kernels
+don't like the \fB\fC#!\fR interpreter to itself be interpreted.
+On these operating system kernels, the system administrator must
+compile and install a small shim written in C, \fB\fCcl\-shim.c\fR,
+that will handle the proper script invocation.
+.PP
+Most kernels have restrictions on how they handle arguments to a \fB\fC#!\fR script,
+that prevent e.g. using \fB\fC/usr/bin/env\fR as a trampoline;
+however, you may use the fully portable solution as follows,
+where the \fB\fC":" ;\fR ensures that the script should remain valid
+bilingual shell and Lisp code:
+.PP
+.RS
+.nf
+#!/bin/sh
+":" ; exec cl\-launch \-X \-sp my\-package \-E main \-\- "$0" ${1+"$@"} || exit
+.fi
+.RE
+.PP
+(Actually \fB\fC"$@"\fR instead of \fB\fC${1+"$@"}\fR should work just fine,
+unless you have an antique shell.)
+.PP
+Note that if you don't need Lisp code to be loaded from your script,
+with everything happening in the build specification, then you may instead
+use a simple \fB\fC#!/bin/sh\fR shell script from which you:
+.PP
+.RS
+.nf
+exec /path/to/cl\-launch \-x ... \-\- "$@".
+.fi
+.RE
+.PP
+Also, in case you can't rely on \fB\fCcl\-launch\fR being at a fixed path,
+or if your shell and/or kernel combination doesn't support using \fB\fCcl\-launch\fR
+as a script interpreter, then you may instead start your script
+with the following lines:
+.PP
+.RS
+.nf
+#!/bin/sh
+":" ; exec cl\-launch \-X \-\- "$0" "$@" || exit
+(format t "It works!~%")
+.fi
+.RE
+.PP
+Note that a mainline Linux kernel only supports the recursive \fB\fC#!\fR
+implicit in \fB\fC#!/usr/bin/cl\-launch\fR since 2.6.27.9.
+.SH Dumping images
+.PP
+You can dump an image (for static compilation and fast startup) with option
+\fB\fC\-\-dump IMAGE\fR where \fB\fCIMAGE\fR specifies
+the path where the image will be dumped.
+.PP
+If you use option \fB\fC\-\-include PATH\fR then the image will be loaded back from
+that specified directory instead of the directory where you dumped it.
+This is useful if you're preparing a script to be installed at another place
+maybe on another computer.
+.PP
+This option is currently supported on all CL implementations available
+with \fB\fCcl\-launch\fR\&.
+.PP
+As a limitation, \fB\fCLispWorks\fR will print a banner on standard output,
+unless you use the standalone executable option below.
+.PP
+As another limitation, \fB\fCECL\fR will not be able to dump an image when running
+from a previously dumped image (with \fB\fC\-\-image\fR). This is because of the
+link model of ECL, whereby you'd need to be able to locate which object files
+were used in linking the original image, keep track of these files,
+and prepend the list of them to to the object files linked into the dump.
+This is not conceptually impossible and patches are welcome.
+However, we hope to support that someday with a real build system
+that does it for you, such as XCVB.
+.SH Standalone executables
+.PP
+You can create standalone executables with the option \fB\fC\-\-dump '!'\fR
+(or by giving a \fB\fC\-\-dump\fR argument identical to the \fB\fC\-\-output\fR argument).
+.PP
+This option is currently only supported with
+\fB\fCSBCL\fR, \fB\fCECL\fR, \fB\fCCLISP\fR, \fB\fCCMUCL\fR, \fB\fCCCL\fR and \fB\fCLispWorks\fR Professional.
+Moreover \fB\fCCLISP\fR has the issues below.
+.PP
+\fB\fCCLISP\fR standalone executables will react magically if invoked with options
+such as \fB\fC\-\-clisp\-help\fR or \fB\fC\-\-clisp\-x '(sys::main\-loop)'\fR\&.
+That's a pretty far\-fetched thing to hit by mistake, and
+the \fB\fCCLISP\fR maintainers consider it a feature (I don't).
+Don't use such executables as \fB\fCsetuid\fR, and don't let untrusted users
+control arguments given to such executables that are run with extra privileges.
+.SH cl\-launch runtime API
+.PP
+\fB\fCcl\-launch\fR provides the following Lisp functions:
+.PP
+Function \fB\fCcl\-launch:compile\-and\-load\-file\fR takes as an argument
+a source pathname designator, and keyword arguments
+\fB\fCforce\-recompile\fR (default \fB\fCNIL\fR) and \fB\fCverbose\fR (default \fB\fCNIL\fR).
+It will arrange to compile the specified source file if it is
+explicitly requested, or if the file doesn't exist,
+or if the fasl is not up\-to\-date.
+It will compile and load with the specified verbosity.
+It will take use \fB\fCuiop:compile\-file\-pathname*\fR to determine the fasl pathname.
+.PP
+The following variables and functions previously provided by \fB\fCcl\-launch\fR
+have the following replacement from \fB\fCASDF\fR and \fB\fCUIOP\fR:
+.PP
+Variable \fB\fCcl\-launch:*arguments*\fR
+is replaced by \fB\fCuiop:*command\-line\-arguments*\fR\&.
+.PP
+Function \fB\fCcl\-launch:getenv\fR is replaced by \fB\fCuiop:getenv\fR\&.
+.PP
+Function \fB\fCcl\-launch:load\-system\fR is replaced by \fB\fCasdf:load\-system\fR\&.
+.PP
+Function \fB\fCcl\-launch:quit\fR is replaced by \fB\fCuiop:quit\fR
+(beware: the lambda\-list is slightly different).
+.PP
+Additionally, environment variables \fB\fCCL_LAUNCH_PID\fR and \fB\fCCL_LAUNCH_FILE\fR
+will be set to the process ID and the script invocation filename respectively.
+.SH Verbose output mode
+.PP
+If the shell variable \fB\fCCL_LAUNCH_VERBOSE\fR is exported and non\-\fB\fCnil\fR,
+then \fB\fCcl\-launch\fR and the scripts it generates will produce
+an abundance of output, display such things as the Lisp invocation command,
+compiling and loading files with \fB\fC:verbose t\fR and \fB\fC:print t\fR, etc.
+This is only useful for debugging \fB\fCcl\-launch\fR and/or your build process.
+Option \fB\fC\-\-verbose\fR sets this variable, whereas option \fB\fC\-\-quiet\fR resets it.
+.SH Makefile examples
+.PP
+.RS
+.nf
+### Automatically download of the current version of cl\-launch if not present
+cl\-launch.sh:
+        wget \-O cl\-launch.sh http://fare.tunes.org/files/cl\-launch/cl\-launch.sh
+        chmod a+x cl\-launch.sh
+### Making a shell script executable from a simple Lisp file named foo.lisp
+foo.sh: cl\-launch.sh foo.lisp
+        ./cl\-launch.sh \-\-output foo.sh \-\-file foo.lisp
+### A more complex example using all options.
+run\-foo.sh: cl\-launch.sh preamble.lisp
+        ./cl\-launch.sh \-\-output run\-foo.sh \\
+        \-\-file preamble.lisp \-\-system foo \\
+        \-\-init "(foo:main uiop:*command\-line\-arguments*)" \\
+        \-\-source\-registry ${PREFIX}/cl\-foo/systems: \\
+        \-\-lisp "ccl sbcl" \-\-wrap 'SBCL=/usr/local/bin/sbcl\-no\-unicode' \\
+        \-\-no\-include
+### An example with horrible nested makefile, shell and Lisp quoting
+hello:
+        opera=wORlD ; ./cl\-launch.sh \-\-execute \-\-init \\
+        "(format t \\"~25R~A~A~%\\" 6873049 #\\\\space '$$opera)"
+.fi
+.RE
+.SH Caveat Lispor
+.PP
+\fB\fCcl\-launch\fR begins evaluation of your Lisp software
+in the \fB\fCcl\-user\fR package, or whichever package you specify.
+By the time your initialization forms are evaluated,
+the package may or may not have changed,
+depending on the fine\-grained semantics of \fB\fCload\fR\&.
+Be sure to use \fB\fCin\-package\fR if these things matter.
+If you change the readtable, even weirder things may happen.
+.PP
+There are lots of ways of making mistakes by improperly quoting things when
+you write shell commands. \fB\fCcl\-launch\fR does the right thing,
+but you still must be careful with the nested quoting mechanisms
+of \fB\fCmake\fR, shell, and Lisp.
+.PP
+Here is a simple example use of cl\-launch to quickly compare the result of
+a same computation on a variety of systems:
+.PP
+.RS
+.nf
+for l in sbcl cmucl clisp gcl ccl ; do
+  ./cl\-launch.sh \-\-lisp $l \-\-execute \-\-init \\
+    '(format t "'$l' ~A~%" most\-positive\-fixnum)' ; done
+.fi
+.RE
+.PP
+Internally, \fB\fCcl\-launch\fR includes many self\-test functions.
+You may for instance try (from a directory where it may create junk):
+.PP
+.RS
+.nf
+\&./cl\-launch.sh \-l 'sbcl cmucl clisp gclcvs' \-B tests
+.fi
+.RE
+.PP
+Share and Enjoy!
+.PP
+See our web page on:
+        
+\[la]http://www.cliki.net/cl-launch\[ra]
+.PP
+Note: if this help is too long for you, you may scroll back, or use:
+.PP
+.RS
+.nf
+    cl \-\-more\-help | less
+.fi
+.RE
