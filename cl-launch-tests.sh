@@ -244,7 +244,7 @@ do_tests () {
   for TS in "" " system" ; do
   TDIFS="$TDIF$TS"
   case "$TD:$TS:$LISP" in
-    dump_*:cmucl*|dump_*:gcl*|dump_*:allegro|dump_*:ccl|dump_*:clisp|dump_*:scl)
+    dump_*:cmucl*|dump_*:gcl*|dump_*:allegro|dump_*:scl)
       : invalid or unsupported combo ;; # actually only available for ecl and sbcl
     *)
   for TI in "noinit" "init" ; do

@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper generator for Common Lisp software -*- Lisp -*-
-CL_LAUNCH_VERSION='4.0.7.8'
+CL_LAUNCH_VERSION='4.0.7.9'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -2286,9 +2286,10 @@ NIL
   (with-output-file (o n :if-exists :rename-and-delete) (write x :stream o :pretty t :readably t)))
 (defvar *temporary-filenames* nil)
 (defvar *temporary-file-prefix*
-  (format nil "~Acl-launch-~A-" *temporary-directory* (getenvp "CL_LAUNCH_PID")))
+  (native-namestring (subpathname *temporary-directory*
+                                  (strcat "cl-launch-" (getenvp "CL_LAUNCH_PID")))))
 (defun make-temporary-filename (x)
-  (strcat *temporary-file-prefix* x))
+  (parse-native-namestring (strcat *temporary-file-prefix* x)))
 (defun register-temporary-filename (n)
   (push n *temporary-filenames*)
   n)
@@ -2322,7 +2323,7 @@ NIL
 (defun ensure-lisp-file (x &optional (name "load.lisp"))
   (let ((x (ensure-lisp-loadable x)))
     (etypecase x
-      (stream (temporary-file-from-stream x "load.lisp"))
+      (stream (temporary-file-from-stream x name))
       (pathname (ensure-lisp-file-name x name)))))
 (defun cleanup-temporary-files ()
   (loop :for n = (pop *temporary-filenames*)
@@ -2416,7 +2417,7 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
   ;; return the new list of dependencies, i.e. a singleton of the actual system name.
   (let ((sys (strcat "cl-launch-" stem)))
     (eval `(handler-bind ((warning #'muffle-warning))
-             (defsystem ,sys :pathname nil :depends-on ,(reverse rdeps) ,@options)
+             (defsystem ,sys :pathname ,*temporary-directory* :depends-on ,(reverse rdeps) ,@options)
              (defmethod input-files ((o operation) (s (eql (find-system ,sys))))
                ',(cl-launch-files))))
     (list sys)))
@@ -2458,7 +2459,7 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
                         :code ,arg :package :cl-user))))
        #+(or ecl mkcl)
        (with-input (i (temporary-file-from-code arg (format nil "eval-~D.lisp" *dependency-counter*)))
-         (make-dependency :load i :cl-user previous))))
+         (make-dependency dump :load i :cl-user previous))))
     ((:require)
      (cons `(:require ,arg) previous))
     ((:load-system)
@@ -2479,7 +2480,7 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
                             #+(or ecl mkcl) ;; now that all the relevant runtime support is in UIOP?
                             (let ((header *cl-launch-header*)) ;; maybe for dependency timestamp?
                               (setf *features* (remove :cl-launch *features*))
-                              `(:load ,(ensure-lisp-file header "header.lisp") :cl-user)))
+                              `((:load ,(ensure-lisp-file header "header.lisp") :cl-user))))
                         ,@build
                         ,(let ((footer
                                  `(setf
@@ -2524,11 +2525,13 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
               Go get it at http://www.quicklisp.org/beta/index.html"))))
 
 (defun run (&key quicklisp source-registry build dump restart final init (quit t))
-  (pushnew :cl-launched *features*)
-  (compute-arguments)
-  (when source-registry (initialize-source-registry source-registry))
-  (when quicklisp (load-quicklisp))
-  (build-program dump build restart final init quit))
+  (setf *lisp-interaction* (not quit))
+  (with-fatal-condition-handler ()
+    (pushnew :cl-launched *features*)
+    (compute-arguments)
+    (when source-registry (initialize-source-registry source-registry))
+    (when quicklisp (load-quicklisp))
+    (build-program dump build restart final init quit)))
 
 (pushnew :cl-launch *features*))
 NIL
