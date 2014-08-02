@@ -238,6 +238,8 @@ do_tests () {
     image*:dump*:ecl) ;;
     # we don't know how to dump at all with ABCL, XCL
     *:dump*:abcl|image*:*:abcl|*:dump*:xcl|image*:*:xcl) ;;
+    # Unidentified bug using image on CLISP as of 4.0.7.9
+    image*:clisp) ;;
     *)
   for IF in "noinc" "noinc file" "inc" "inc1 file" "inc2 file" ; do
   TDIF="$TM$TD$IF"
