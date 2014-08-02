@@ -6,7 +6,7 @@ cl-launch (4.0.8-1) unstable; urgency=low
   * Fix various bugs in some cases when dumping images.
   * Various small tweaks.
 
- -- François-René Rideau <fare@tunes.org>  Fri, 01 Aug 2014 22:06:37 -0400
+ -- Francois-Rene Rideau <fare@tunes.org>  Fri, 01 Aug 2014 22:06:37 -0400
 
 cl-launch (4.0.7-1) unstable; urgency=low
 

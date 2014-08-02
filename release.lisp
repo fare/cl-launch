@@ -74,7 +74,7 @@ exec "$(dirname $0)/cl-launch.sh" \
       (clean)
       (delete-file-if-exists origtarball)
       (run `(git-buildpackage --git-debian-branch=master --git-upstream-branch=master (--git-upstream-tag= ,version) --git-tag --git-retag --git-ignore-branch) :show t)
-      (run `(lintian -c --fail-on-warnings (../cl-launch_ ,debian-version _ ,(debian-arch) .changes)) :show t)
+      (run `(lintian -c --fail-on-warnings --profile debian (../cl-launch_ ,debian-version _ ,(debian-arch) .changes)) :show t)
       (clean))))
 
 (defun publish-debian-package ()

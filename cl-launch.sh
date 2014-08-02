@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper generator for Common Lisp software -*- Lisp -*-
-CL_LAUNCH_VERSION='4.0.7.11'
+CL_LAUNCH_VERSION='4.0.7.12'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -2316,10 +2316,11 @@ NIL
 (defun ensure-lisp-file-name (x &optional (name "load.lisp"))
   (if (equal (pathname-type x) "lisp") x (temporary-file-from-file x name)))
 (defun ensure-lisp-loadable (x)
-  (etypecase x
-    ((eql t) (or *cl-launch-file* (error "Missing CL_LAUNCH_FILE")))
-    ((or stream pathname) x)
-    (string (parse-native-namestring x))))
+  (cond
+    ((eq x t) (ensure-lisp-loadable (or *cl-launch-file* (error "Missing CL_LAUNCH_FILE"))))
+    ((equal x "-") *standard-input*)
+    ((or (streamp x) (pathnamep x)) x)
+    ((stringp x) (ensure-absolute-pathname (parse-native-namestring x) #'getcwd))))
 (defun ensure-lisp-file (x &optional (name "load.lisp"))
   (let ((x (ensure-lisp-loadable x)))
     (etypecase x
@@ -2389,15 +2390,9 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
   #+(and ecl (not dlopen))
   (load source :verbose *verbose*))
 (defun compute-arguments ()
-  (flet ((foo (v)
-           (let ((x (getenvp v)))
-             (cond
-               ((null x) nil)
-               ((equal x "-") *standard-input*)
-               (t (ensure-absolute-pathname (parse-native-namestring x) #'getcwd))))))
-    (setf *cl-launch-file* (foo "CL_LAUNCH_FILE")
-          *cl-launch-header* (foo "CL_LAUNCH_HEADER")
-          *verbose* (when (getenvp "CL_LAUNCH_VERBOSE") t))))
+  (setf *cl-launch-file* (getenvp "CL_LAUNCH_FILE")
+        *cl-launch-header* (getenvp "CL_LAUNCH_HEADER")
+        *verbose* (when (getenvp "CL_LAUNCH_VERBOSE") t)))
 
 (asdf::register-preloaded-system "cl-launch")
 
