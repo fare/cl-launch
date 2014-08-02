@@ -3,9 +3,10 @@ cl-launch (4.0.8-1) unstable; urgency=low
   * Improve --load dependencies so they depend on previously loaded systems.
     This generalizes to all platforms the technique so far used only by ECL.
   * Integrate prototypical examples in the head of the manual.
+  * Fix various bugs in some cases when dumping images.
   * Various small tweaks.
 
- -- François-René Rideau <fare@tunes.org>  Tue, 29 Jul 2014 00:35:35 -0400
+ -- François-René Rideau <fare@tunes.org>  Fri, 01 Aug 2014 22:06:37 -0400
 
 cl-launch (4.0.7-1) unstable; urgency=low
 
