@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper for Common Lisp -*- Lisp -*-
-CL_LAUNCH_VERSION='4.0.8.1'
+CL_LAUNCH_VERSION='4.0.8.2'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -1031,7 +1031,7 @@ process_options () {
       -q|--quiet)
         unset CL_LAUNCH_VERBOSE ;;
       -e|--eval)
-        add_build_form "(:eval \"(in-package :$PACKAGE)$(kwote "$1")\")" ; shift ;;
+        add_build_form "(:eval \"(cl:in-package :$PACKAGE)$(kwote "$1")\")" ; shift ;;
       -L|--load)
         add_build_form "(:load \"$(kwote "$1")\" :$PACKAGE)" ; shift ;;
       -f|--file)
@@ -1039,7 +1039,7 @@ process_options () {
       -s|--system|--load-system)
         add_build_form "(:load-system \"$1\")" ; shift ;;
       --require)
-        add_build_form "(require \"$(kwote "$1")\")" ; shift ;;
+        add_build_form "(:require \"$(kwote "$1")\")" ; shift ;;
       -F|--final)
         add_final_form "$1" ; shift ;;
       -i|--init)
@@ -1158,7 +1158,7 @@ add_build_form () {
 }
 add_init_form () {
   if ! [ "${INIT_PACKAGE}" = "$PACKAGE" ] ; then
-    package_form="(in-package :$PACKAGE)"
+    package_form="(cl:in-package :$PACKAGE)"
     INIT_PACKAGE="$PACKAGE"
   else
     package_form=""
@@ -1168,7 +1168,7 @@ add_init_form () {
 }
 add_final_form () {
   if ! [ "${FINAL_PACKAGE}" = "$PACKAGE" ] ; then
-    package_form="(in-package :$PACKAGE)"
+    package_form="(cl:in-package :$PACKAGE)"
     FINAL_PACKAGE="$PACKAGE"
   else
     package_form=""
@@ -2168,7 +2168,7 @@ print_lisp_header () {
   CL_HEADER=t
   print_lisp_code
   echo ";;;;; Return to the default package."
-  echo "(in-package :cl-user)"
+  echo "(cl:in-package :cl-user)"
   print_lisp_code_bottom
 }
 print_lisp_launcher () {
