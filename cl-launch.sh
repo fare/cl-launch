@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper for Common Lisp -*- Lisp -*-
-CL_LAUNCH_VERSION='4.0.8.2'
+CL_LAUNCH_VERSION='4.1'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -99,9 +99,8 @@ Name
 ----
 cl-launch - shell wrapper for Common Lisp
 
-
-Normal Usage
-------------
+Synopsis
+--------
     $PROGBASE [options] '(lisp (form) to evaluate)'
         evaluate specified form, print the results followed by newline
         as in: cl -l sbcl -sp my-system-and-package '(some form)'
@@ -110,11 +109,11 @@ Normal Usage
         run specified Lisp script, passing arguments, as in a script with
         #!/usr/bin/cl -sp my-system-and-package -E main
 
-    $PROGBASE [options] --execute [options] [-- arguments...]
+    $PROGBASE [options] [--execute] [options] [-- arguments...]
         run the specified software without generating a script (default)
 
-    $PROGBASE [options] --output SCRIPT [options]
-        generate a runnable shell script from the software specification
+    $PROGBASE [options] --output EXECUTABLE [options]
+        generate an executable script or binary from the software specification
 
 Special modes
 -------------
@@ -628,7 +627,7 @@ Hence, variable \`\$SBCL\` controls where to look for the \`sbcl\` implementatio
 and variable \`\$CMUCL\` controls where to look for the \`cmucl\` implementation.
 If a binary is found with a matching pathname (using the standard unix \`\$PATH\`
 as required), then said implementation will be used, using proper command line
-options, that may be overriden with an environment variable similar to the previous
+options, that may be overridden with an environment variable similar to the previous
 but with \`_OPTIONS\` appended to its name.
 Hence, \`\$CMUCL_OPTIONS\` for \`cmucl\`, \`\$CLISP_OPTIONS\` for \`clisp\`, etc.
 Sensible defaults are provided for each implementation, so as to execute the

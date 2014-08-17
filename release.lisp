@@ -1,5 +1,6 @@
 #!/bin/sh
 #| -*- Lisp -*-
+#!/usr/bin/cl -s inferior-shell -s optima.ppcre -E cl-launch-release::main
 exec "$(dirname $0)/cl-launch.sh" \
   --system inferior-shell --system optima.ppcre \
   -X --package cl-launch-release --entry main -- "$0" "$@" ; exit
@@ -54,7 +55,7 @@ exec "$(dirname $0)/cl-launch.sh" \
     sv))
 
 (defun debian-arch ()
-  "amd64")
+  (run/ss `(dpkg --print-architecture)))
 
 (defun git-tag (&optional (pattern "4.*"))
   (with-current-directory ((pn))
@@ -68,22 +69,17 @@ exec "$(dirname $0)/cl-launch.sh" \
 (defun debian-package ()
   (let* ((debian-version (debian-version))
          (version (get-version))
-         (origtarball (pn (strcat "../cl-launch_" version ".orig.tar.gz"))))
+         (origtarball (pn (strcat "../cl-launch_" version ".orig.tar.gz")))
+         (home (user-homedir-pathname))
+         (cl-launch-version (strcat "cl-launch-" version))
+         (cldir (subpathname home "files/cl-launch/")))
     (with-current-directory ((pn))
       (run `(pwd) :show t)
       (clean)
       (delete-file-if-exists origtarball)
       (run `(git-buildpackage --git-debian-branch=master --git-upstream-branch=master (--git-upstream-tag= ,version) --git-tag --git-retag --git-ignore-branch) :show t)
       (run `(lintian -c --fail-on-warnings --profile debian (../cl-launch_ ,debian-version _ ,(debian-arch) .changes)) :show t)
-      (clean))))
-
-(defun publish-debian-package ()
-  (let* ((version (get-version))
-         (debian-version (debian-version))
-         (home (user-homedir-pathname))
-         (cl-launch-version (strcat "cl-launch-" version))
-         (cldir (subpathname home "files/cl-launch/")))
-    (with-current-directory ((pn))
+      (clean)
       (run `(pwd) :show t)
       (run `(./cl-launch.sh --include "." "-B" install_path) :show t)
       (run `(./cl-launch.sh --no-include -o cl-launch "-B" install_bin) :show t)
@@ -101,10 +97,16 @@ exec "$(dirname $0)/cl-launch.sh" \
       (run `(pwd) :show t)
       (run/interactive `(gpg -b -a (cl-launch- ,version .tar.gz)) :show t)
       (run `(ln -sf (,cl-launch-version .tar.gz) cl-launch.tar.gz) :show t)
-      (run `(ln -sf (,cl-launch-version .tar.gz.asc) cl-launch.tar.gz.asc) :show t)
+      (run `(ln -sf (,cl-launch-version .tar.gz.asc) cl-launch.tar.gz.asc) :show t))))
+
+(defun publish-debian-package ()
+  (let* ((debian-version (debian-version))
+         (home (user-homedir-pathname))
+         (cldir (subpathname home "files/cl-launch/")))
+    (with-current-directory (cldir)
       (run `(dput mentors (cl-launch_ ,debian-version _ ,(debian-arch) .changes)) :show t)
-      (run `(rsync -av --delete ,cldir "common-lisp.net:/project/xcvb/public_html/cl-launch/") :show t))
-    (values)))
+      (run `(rsync -av --delete ,cldir "common-lisp.net:/project/xcvb/public_html/cl-launch/") :show t)))
+  (values))
 
 (defun source ()
   (with-current-directory ()

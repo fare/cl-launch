@@ -1,3 +1,10 @@
+cl-launch (4.1-2) unstable; urgency=low
+
+  * Convert help to markdown, extract man page from it.
+  * Fix support for :require dependencies
+
+ -- Francois-Rene Rideau <fare@tunes.org>  Tue, 19 Aug 2014 22:45:10 -0400
+
 cl-launch (4.0.8-1) unstable; urgency=low
 
   * Improve --load dependencies so they depend on previously loaded systems.

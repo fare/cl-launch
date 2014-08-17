@@ -1,8 +1,8 @@
-.TH cl\-launch.sh 4.0.8.1 "(August 2014)" "Francois\-Rene Rideau's" "shell wrapper for Common Lisp"
+.TH cl\-launch.sh 1 "(August 2014)" "Francois\-Rene Rideau's" "Shell Scripting with Common Lisp"
 .SH Name
 .PP
 cl\-launch \- shell wrapper for Common Lisp
-.SH Normal Usage
+.SH Synopsis
 .PP
 .RS
 .nf
@@ -12,10 +12,10 @@ cl [options] '(lisp (form) to evaluate)'
 cl [options] script\-file arguments...
     run specified Lisp script, passing arguments, as in a script with
     #!/usr/bin/cl \-sp my\-system\-and\-package \-E main
-cl [options] \-\-execute [options] [\-\- arguments...]
+cl [options] [\-\-execute] [options] [\-\- arguments...]
     run the specified software without generating a script (default)
-cl [options] \-\-output SCRIPT [options]
-    generate a runnable shell script from the software specification
+cl [options] \-\-output EXECUTABLE [options]
+    generate an executable script or binary from the software specification
 .fi
 .RE
 .SH Special modes
@@ -566,7 +566,7 @@ Hence, variable \fB\fC$SBCL\fR controls where to look for the \fB\fCsbcl\fR impl
 and variable \fB\fC$CMUCL\fR controls where to look for the \fB\fCcmucl\fR implementation.
 If a binary is found with a matching pathname (using the standard unix \fB\fC$PATH\fR
 as required), then said implementation will be used, using proper command line
-options, that may be overriden with an environment variable similar to the previous
+options, that may be overridden with an environment variable similar to the previous
 but with \fB\fC_OPTIONS\fR appended to its name.
 Hence, \fB\fC$CMUCL_OPTIONS\fR for \fB\fCcmucl\fR, \fB\fC$CLISP_OPTIONS\fR for \fB\fCclisp\fR, etc.
 Sensible defaults are provided for each implementation, so as to execute the
