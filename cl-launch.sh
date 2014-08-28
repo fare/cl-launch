@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper for Common Lisp -*- Lisp -*-
-CL_LAUNCH_VERSION='4.1'
+CL_LAUNCH_VERSION='4.1.0.1'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -1676,7 +1676,7 @@ print_cl_launch_asd () {
 ;; If the initial ASDF isn't, you're likely in trouble.
 ;;
 (asdf:defsystem :cl-launch
-  :depends-on ((:version :asdf "3.0.1")) ; we need UIOP, included in ASDF 3 and later
+  :depends-on ((:version "asdf" "3.0.1")) ; we need UIOP, included in ASDF 3 and later
   :licence "MIT"
   :components ((:file "launcher")))
 END
@@ -1874,9 +1874,8 @@ implementation_ecl () {
 }
 implementation_ecl_bytecodes () {
   implementation_ecl
-  OPTIONS="${OPTIONS} -eval (ext::install-bytecodes-compiler)"
-  "${ECL:-ecl}" || return 1
   OPTIONS="${ECL_OPTIONS:- -q -norc}"
+  OPTIONS="${OPTIONS} -eval (ext::install-bytecodes-compiler)"
   EVAL=-eval
   ENDARGS=--
   #IMAGE_ARG="-q -load" # for :fasl
@@ -2304,19 +2303,21 @@ NIL
                  (when (member :asdf *features*)
                    (maybe-display (format nil "Found ASDF ~A" (asdf-version)))
                    (stage-2))) ;; doesn't return.
+               (centrally-register (path)
+                 (let ((r (asdf-symbol '*central-registry*)))
+                   (pushnew path (symbol-value r))
+                   (pushnew (subpath path :directory '("uiop")) (symbol-value r))))
                (configure-asdf ()
                  ;; configure older versions of ASDF, as needed
                  (cond
                    ((probe-file (visible-default-user-asdf-lisp))
                     (unless (member :asdf3.1 *features*)
                       (maybe-display "Telling this old ASDF about your ~/common-lisp/asdf/")
-                      (pushnew (visible-default-user-asdf-directory)
-                               (symbol-value (asdf-symbol '*central-registry*)))))
+                      (centrally-register (visible-default-user-asdf-directory))))
                    ((probe-file (hidden-default-user-asdf-lisp))
                     (unless (member :asdf2 *features*)
                       (maybe-display "Telling this antique ASDF about your ~/.local/share/common-lisp/asdf/")
-                      (pushnew (hidden-default-user-asdf-directory)
-                               (symbol-value (asdf-symbol '*central-registry*)))))))
+                      (centrally-register (hidden-default-user-asdf-directory))))))
                (maybe-done-stage-2 ()
                  (when (ignore-errors (asdf-call 'version-satisfies
                                                  (asdf-version) required-asdf-version))
