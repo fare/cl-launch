@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
-#include <alloca.h>
 #include <errno.h>
 
 #ifndef CL_LAUNCH_SCRIPT
