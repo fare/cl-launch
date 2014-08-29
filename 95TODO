@@ -70,3 +70,10 @@ TODO for cl-launch as of 4.0.7.7
    * --core-only
      That's hard to add, not that useful, and may require hacking
      both uiop and cl-launch to get it right. Lots of pain, no gain.
+
+* Find a way to load faster?
+   When starting cl-launch, I experience a pause of ~1s.
+   Half of it is loading the asdf fasl, then the upgraded asdf fasl.
+   The other half is scanning the source registry.
+   At least this scanning can be sped up, by patching ASDF
+   to support a source-registry cache or something.
