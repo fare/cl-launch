@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper for Common Lisp -*- Lisp -*-
-CL_LAUNCH_VERSION='4.1.0.2'
+CL_LAUNCH_VERSION='4.1.0.3'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -2288,9 +2288,11 @@ NIL
                                    "~/" '(".local" "share" "common-lisp"))
                  #+(or unix linux bsd darwin)
                  (progn
-                   (loop :for (name path) :in '("local system" ("local" "share" "common-lisp")) :do
-                     (loop :for sub :in '(() ("source")) :do
-                       (try-file-stage-1 "asdf" name #p"/" "/" (append '("usr") path sub))))
+                   (loop :for (name path) :in '(("local system" ("local")) ("managed system" ()))
+                         :do (loop :for sub :in '(() ("source"))
+                                   :do (try-file-stage-1
+                                        "asdf" name #p"/" "/"
+                                        (append '("usr") path '("share" "common-lisp") sub))))
                    (try-file-stage-1 "cl-asdf" "managed system" #p"/" "/"
                                      '("usr" "share" "common-lisp" "source")))
                  (error "Could not load ASDF."))
