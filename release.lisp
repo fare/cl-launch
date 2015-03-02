@@ -78,7 +78,9 @@ exec "$(dirname $0)/cl-launch.sh" \
       (clean)
       (delete-file-if-exists origtarball)
       (run `(git-buildpackage --git-debian-branch=master --git-upstream-branch=master (--git-upstream-tag= ,version) --git-tag --git-retag --git-ignore-branch) :show t)
-      (run `(lintian -c --fail-on-warnings --profile debian (../cl-launch_ ,debian-version _ ,(debian-arch) .changes)) :show t)
+      (run `(lintian --dont-check-part standards-version
+                     --fail-on-warnings --profile debian
+                     (../cl-launch_ ,debian-version _ ,(debian-arch) .changes)) :show t)
       (clean)
       (run `(pwd) :show t)
       (run `(./cl-launch.sh --include "." "-B" install_path) :show t)

@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper for Common Lisp -*- Lisp -*-
-CL_LAUNCH_VERSION='4.1.0.4'
+CL_LAUNCH_VERSION='4.1.1'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:

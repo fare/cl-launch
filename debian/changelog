@@ -1,3 +1,10 @@
+cl-launch (4.1.1-1) unstable; urgency=low
+
+  * Portability: better fallbacks for implementations without a recent ASDF,
+    better support for ecl_bytecodes, make cl-shim work on BSD.
+
+ -- Francois-Rene Rideau <fare@tunes.org>  Mon, 02 Mar 2015 17:58:34 -0500
+
 cl-launch (4.1-2) unstable; urgency=low
 
   * Convert help to markdown, extract man page from it.
