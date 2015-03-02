@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper for Common Lisp -*- Lisp -*-
-CL_LAUNCH_VERSION='4.1.0.1'
+CL_LAUNCH_VERSION='4.1.0.2'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -2250,15 +2250,11 @@ NIL
                  (ignore-errors
                   (call-maybe-verbosely (format nil "Trying to ~A" message) function))
                  (maybe-done-stage-1))
-               (try-file-stage-1 (explanation pathname)
-                 (try-stage-1 (format nil "load ASDF from ~A" explanation)
-                              #'(lambda () (load pathname))))
                (subpath (parent &key directory name type)
-                 (merge-pathnames (make-pathname :defaults parent :version nil
-                                                 :directory (cons :relative directory) :name name :type type)
+                 (merge-pathnames (make-pathname :defaults parent :name name :type type :version nil
+                                                 :directory (cons :relative directory))
                                   parent))
-               (build/asdf.lisp (directory)
-                 (subpath directory :directory '("build") :name "asdf" :type "lisp"))
+               (build/asdf.lisp (x) (subpath x :directory '("build") :name "asdf" :type "lisp"))
                (visible-default-user-asdf-directory ()
                  (subpath (user-homedir-pathname) :directory '("common-lisp" "asdf")))
                (visible-default-user-asdf-lisp ()
@@ -2267,6 +2263,12 @@ NIL
                  (subpath (user-homedir-pathname) :directory '(".local" "share" "common-lisp" "asdf")))
                (hidden-default-user-asdf-lisp ()
                  (build/asdf.lisp (hidden-default-user-asdf-directory)))
+               (try-file-stage-1 (name explanation base root sub)
+                 (try-stage-1
+                  (format nil "load ASDF from ~A/ under the ~A CL source directory ~A~{~A/~}"
+                          name explanation root sub)
+                  #'(lambda () (load (build/asdf.lisp
+                                      (subpath base :directory (append sub (list name))))))))
                (stage-1 () ;; Try to load ASDF at all, any ASDF.
                  (try-stage-1
                   ;; Do nothing if ASDF is already loaded
@@ -2280,23 +2282,17 @@ NIL
                   ;; Most implementations provide ASDF 3, but some of them only ASDF 2
                   ;; and antique versions only ASDF 1.
                   #'(lambda () (funcall 'require "asdf")))
-                 (try-file-stage-1
-                  "asdf/ under the default (visible) CL source directory ~/common-lisp/"
-                  (visible-default-user-asdf-lisp))
-                 (try-file-stage-1
-                  "asdf/ under the default (hidden) CL source directory ~/.local/share/common-lisp/"
-                  (hidden-default-user-asdf-lisp))
+                 (try-file-stage-1 "asdf" "default (visible)" (user-homedir-pathname)
+                                   "~/" '("common-lisp"))
+                 (try-file-stage-1 "asdf" "default (hidden)" (user-homedir-pathname)
+                                   "~/" '(".local" "share" "common-lisp"))
                  #+(or unix linux bsd darwin)
                  (progn
-                   (try-file-stage-1
-                    "asdf/ under the local system CL source directory /usr/local/share/common-lisp/"
-                    (build/asdf.lisp #p"/usr/local/share/common-lisp/asdf/"))
-                   (try-file-stage-1
-                    "asdf/ under the managed system CL source directory /usr/share/common-lisp/"
-                    (build/asdf.lisp #p"/usr/share/common-lisp/asdf/"))
-                   (try-file-stage-1
-                    "cl-asdf/ under the managed system CL source directory /usr/share/common-lisp/"
-                    (build/asdf.lisp #p"/usr/share/common-lisp/cl-asdf/")))
+                   (loop :for (name path) :in '("local system" ("local" "share" "common-lisp")) :do
+                     (loop :for sub :in '(() ("source")) :do
+                       (try-file-stage-1 "asdf" name #p"/" "/" (append '("usr") path sub))))
+                   (try-file-stage-1 "cl-asdf" "managed system" #p"/" "/"
+                                     '("usr" "share" "common-lisp" "source")))
                  (error "Could not load ASDF."))
                (maybe-done-stage-1 ()
                  ;; If we have ASDF, then go to stage 2: have it upgrade itself.
