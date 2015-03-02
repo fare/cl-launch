@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper for Common Lisp -*- Lisp -*-
-CL_LAUNCH_VERSION='4.1.0.3'
+CL_LAUNCH_VERSION='4.1.0.4'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -2343,7 +2343,7 @@ NIL
 ;; Because of ASDF upgrade punting, this ASDF package may be a new one.
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (unless (or #+asdf2 (asdf:version-satisfies (asdf:asdf-version) "3.0.1"))
-    (error "cl-launch requires ASDF 3.0.1 or later")))
+    (error "cl-launch requires ASDF 3.0.1 or later (3.1.1 for dumping images)")))
 NIL
 ":" 't #-cl-launch ;'; cl_fragment<<'NIL'
 ;;;; Create cl-launch with UIOP.
@@ -2584,9 +2584,12 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
                                       (funcall (ensure-function ,(car restart) :package ,(cdr restart)))))
                    ;; Provide a sensible timestamp
                    ;; For SBCL and other platforms that die on dump-image, clean before the end:
-                   :perform (image-op :before (o c)
-                              (setf *features* (remove :cl-launched *features*))
-                              (cleanup-temporary-files))))))
+                   ,@(if (version<= "3.1.1" (asdf-version))
+                         `(:perform (image-op :before (o c)
+                             (setf *features* (remove :cl-launched *features*))
+                             (cleanup-temporary-files)))
+                         (when dump
+                           (error "Dumping an image with cl-launch 4 requires ASDF 3.1.1 or later")))))))
          (load-sys program-sys) ;; Give quicklisp a chance to download things
          (when dump
            (operate op program-sys)))
