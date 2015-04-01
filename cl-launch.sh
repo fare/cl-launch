@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper for Common Lisp -*- Lisp -*-
-CL_LAUNCH_VERSION='4.1.1'
+CL_LAUNCH_VERSION='4.1.1.1'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -54,7 +54,7 @@ unset \
         EXEC_LISP DO_LISP DUMP LOAD_IMAGE RESTART RESTART_PACKAGE IMAGE IMAGE_OPT \
         EXTRA_CONFIG_VARIABLES \
         EXECUTABLE_IMAGE STANDALONE_EXECUTABLE CL_LAUNCH_STANDALONE \
-        CL_LAUNCH_FILE __CL_ARGV0 IS_X_SCRIPT \
+        CL_LAUNCH_FILE __CL_ARGV0 IS_X_SCRIPT DISPATCH_ENTRY_P \
         TEST_SHELLS TORIG IMPL
 
 LISPS="$DEFAULT_LISPS"
@@ -138,6 +138,7 @@ Software specification
                 --require MODULE     require MODULE while building
     -r FUNC     --restart FUNC       restart from build by calling (FUNC)
     -E FUNC     --entry FUNC         restart from build by calling (FUNC argv)
+    -DE N/F  --dispatched-entry N/F  if exec'ed as N, restart from (F argv)
     -i FORM     --init FORM          evaluate FORM after restart
     -ip FORM    --print FORM         evaluate and princ FORM after restart
     -iw FORM    --write FORM         evaluate and write FORM after restart
@@ -313,6 +314,20 @@ at which point it happens when you invoke the executable output file:
   the primary return value of result is generalized boolean true, and
   with status 1 if this value is \`NIL\`.
   See documentation for \`UIOP:RESTORE-IMAGE\` for details.
+* If option `-DE --dispatch-entry` is used, then the next argument must follow
+  the format `NAME/ENTRY`, where `NAME` is a name that the program may be
+  invoked as (the basename of the `uiop:argv0` argument), and `ENTRY` is
+  a function to be invoked as if by --entry when that is the case.
+  Support for option `-DE --dispatch-entry` is delegated to a dispatch library,
+  distributed with `cl-launch` but not part of `cl-launch` itself, by
+  (1) registering a dependency on the dispatch library as if
+  `--system cl-launch-dispatch` had been specified (if not already)
+  (2) if neither `--restart` nor `--entry` was specified yet, registering a
+  default entry function as if by `--entry cl-launch-dispatch:dispatch-entry'.
+  (3) registering an init-form that registers the dispatch entry as if
+  `(cl-launch-dispatch:register-name/entry "NAME/ENTRY" :PACKAGE)` had been
+  specified where PACKAGE is the current package.
+  See the documentation of said library for further details.
 
 The current package can be controlled by option \`-p --package\` and its variant
 \`-sp --system-package\` that also behaves like \`-s --system\`.
@@ -1096,6 +1111,16 @@ process_options () {
         set_restart "$1" ; shift ;;
       -E|--entry)
         set_restart "(lambda()($1 uiop:*command-line-arguments*))" ; shift ;;
+      -DE|--dispatch-entry)
+        if [ -z "$DISPATCH_ENTRY_P" ] ; then
+          add_build_form "(:load-system \"cl-launch-dispatch\")"
+          DISPATCH_ENTRY_P=t
+        fi
+        if [ -z "$RESTART" ] ; then
+          set_entry "cl-launch-dispatch:dispatch-entry"
+        fi
+        add_init_form "(cl-launch-dispatch:register-name/entry \"$(kwote "$1")\" :$PACKAGE)"
+        shift ;;
       -B|--backdoor)
         "$@" ; exit ;;
       --)
@@ -1150,6 +1175,9 @@ in_package () {
 }
 set_restart () {
   RESTART="$1" RESTART_PACKAGE="$PACKAGE"
+}
+set_entry () {
+  set_restart "(cl:lambda()($1 uiop:*command-line-arguments*))"
 }
 add_build_form () {
         SOFTWARE_BUILD_FORMS="$SOFTWARE_BUILD_FORMS${SOFTWARE_BUILD_FORMS+
