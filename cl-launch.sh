@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper for Common Lisp -*- Lisp -*-
-CL_LAUNCH_VERSION='4.1.1.1'
+CL_LAUNCH_VERSION='4.1.2'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -88,7 +88,7 @@ PROGBASE="${0##*/}" # "$(basename "$0")"
 
 CL_LAUNCH_URL="http://fare.tunes.org/files/cl-launch/cl-launch.sh"
 
-HELP_HEADER="cl-launch.sh $CL_LAUNCH_VERSION \"(August 2014)\" \"Francois-Rene Rideau's\" \"shell wrapper for Common Lisp\""
+HELP_HEADER="cl-launch.sh $CL_LAUNCH_VERSION \"(March 2015)\" \"Francois-Rene Rideau's\" \"shell wrapper for Common Lisp\""
 print_help_header () {
   ECHO "$HELP_HEADER"
   ECHO "============"
@@ -314,18 +314,18 @@ at which point it happens when you invoke the executable output file:
   the primary return value of result is generalized boolean true, and
   with status 1 if this value is \`NIL\`.
   See documentation for \`UIOP:RESTORE-IMAGE\` for details.
-* If option `-DE --dispatch-entry` is used, then the next argument must follow
-  the format `NAME/ENTRY`, where `NAME` is a name that the program may be
-  invoked as (the basename of the `uiop:argv0` argument), and `ENTRY` is
+* If option \`-DE --dispatch-entry\` is used, then the next argument must follow
+  the format \`NAME/ENTRY\`, where \`NAME\` is a name that the program may be
+  invoked as (the basename of the \`uiop:argv0\` argument), and \`ENTRY\` is
   a function to be invoked as if by --entry when that is the case.
-  Support for option `-DE --dispatch-entry` is delegated to a dispatch library,
-  distributed with `cl-launch` but not part of `cl-launch` itself, by
+  Support for option \`-DE --dispatch-entry\` is delegated to a dispatch library,
+  distributed with \`cl-launch\` but not part of \`cl-launch\` itself, by
   (1) registering a dependency on the dispatch library as if
-  `--system cl-launch-dispatch` had been specified (if not already)
-  (2) if neither `--restart` nor `--entry` was specified yet, registering a
-  default entry function as if by `--entry cl-launch-dispatch:dispatch-entry'.
+  \`--system cl-launch-dispatch\` had been specified (if not already)
+  (2) if neither \`--restart\` nor \`--entry\` was specified yet, registering a
+  default entry function as if by \`--entry cl-launch-dispatch:dispatch-entry\`.
   (3) registering an init-form that registers the dispatch entry as if
-  `(cl-launch-dispatch:register-name/entry "NAME/ENTRY" :PACKAGE)` had been
+  \`(cl-launch-dispatch:register-name/entry "NAME/ENTRY" :PACKAGE)\` had been
   specified where PACKAGE is the current package.
   See the documentation of said library for further details.
 

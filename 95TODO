@@ -1,4 +1,4 @@
-TODO for cl-launch as of 4.0.7.7
+TODO for cl-launch as of 4.1.2
 
 * When resuming from an image then dumping another, the INCLUDE_PATH
    becomes a very bad variable to look for the image.
@@ -38,13 +38,6 @@ TODO for cl-launch as of 4.0.7.7
    unless explicitly requested a non-default implementation.
    Maybe just add all the cl-launch features to buildapp.
 
-* Support --dispatched-entry as from Xach's buildapp:
-   dispatched-entry would populate a data structure bound to
-   cl-launch::*dispatched-entry* and call a restart function
-   cl-launch::dispatched-restart that uses (argv0) on supported
-   platforms or via cl-launch launcher -- error out on unsupported platforms.
-   http://www.xach.com/lisp/buildapp/
-
 * Support these other options from Xach's buildapp?
    --load-path --asdf-path --asdf-tree --manifest-file --logfile
    * asdf-path and asdf-tree would be accumulated into a source-registry
@@ -77,3 +70,9 @@ TODO for cl-launch as of 4.0.7.7
    The other half is scanning the source registry.
    At least this scanning can be sped up, by patching ASDF
    to support a source-registry cache or something.
+
+* Improve release script to check and/or update that the date in
+   cl-launch.sh matches the date of the commit being released,
+   and generate cl-launch.1 from it using something.
+   pandoc? Ugly. ronn? Looks OK, if we replace its first lines
+   by our first line.
