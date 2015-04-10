@@ -76,3 +76,8 @@ TODO for cl-launch as of 4.1.2
    and generate cl-launch.1 from it using something.
    pandoc? Ugly. ronn? Looks OK, if we replace its first lines
    by our first line.
+
+* Use #+sbcl (setf sb-ext:*evaluator-mode* :interpret)
+   and a series of (declaim (optimize (speed 0) (size 0) (debug 0)
+   (compilation-speed 3))) and such to speed up the cl-launch
+   bootstrap?

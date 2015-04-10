@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper for Common Lisp -*- Lisp -*-
-CL_LAUNCH_VERSION='4.1.2'
+CL_LAUNCH_VERSION='4.1.2.1'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -568,19 +568,26 @@ Note that \`GCL\` seems to not be very actively maintained anymore.
 There are some issues regarding standalone executables on \`CLISP\`.
 See below in the section regarding *Standalone executables*.
 
-\`LispWorks\` requires the Professional Edition.
-Personal edition isn't supported as it won't let you
-control the command line or dump images.
+\`LispWorks\` requires the Professional Edition; the Personal Edition isn't
+supported as it won't let you either control the command line or dump images.
 Dumped images will print a banner, unless you dump a standalone executable.
 To dump an image, make sure you have a license file in your target directory
+and/or to .../lispworks/lib/6-1-0-0/config/lwlicense
 (or use a trampoline shell script to \`exec /path/to/lispworks "\$@"\`),
 create a build script with:
 
-       echo '(hcl:save-image "lispworks" :environment nil)' > si.lisp
+       echo '(hcl:save-image "lispworks-console" :environment nil)' > si.lisp
        lispworks-6-1-0-x86-linux -siteinit - -init - -build si.lisp
 
 LispWorks also requires that you have \`ASDF 3.1.2\` or later;
 make sure you have it installed and configured in your source registry.
+There is no standard name for a console-only variant of LispWorks;
+older versions of cl-launch assume a default \`lispworks\`; since 4.1.2.1,
+\`lispworks-console\` is assumed instead, to avoid conflicts. You can
+control the name you use with the shell variable \`\$LISPWORKS\`, or you
+can just leave \`lispworks-console\` in your path, and use a symlink, copy,
+shell alias or trivial wrapper script to enable your favorite shorter name
+\`lispworks\`, \`lw\`, \`lwcon\`, \`lw-console\`, etc.
 
 Similarly, a mlisp image for allegro can be created as follows:
 
@@ -1949,7 +1956,7 @@ implementation_gcl () {
 }
 implementation_lispworks () { ### NOT EXTENSIVELY TESTED
   # http://www.lispworks.com/documentation/lw60/LW/html/lw-484.htm#pgfId-891723
-  USE_CLBUILD= implementation "${LISPWORKS:-lispworks}" || return 1
+  USE_CLBUILD= implementation "${LISPWORKS:-lispworks-console}" || return 1
   OPTIONS="${LISPWORKS_OPTIONS:- -siteinit - -init -}" #
   LOAD=-build #### way to avoid splash screen (?) and dump executable
   # LOAD=-load
