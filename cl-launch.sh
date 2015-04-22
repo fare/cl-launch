@@ -353,16 +353,16 @@ The following derived options work as if by a combination of simpler options:
   default entry function as if by \`--entry cl-launch-dispatch:dispatch-entry\`.
   (3) registering a build-form that registers the dispatch entry as if by
   \`--eval '(cl-launch-dispatch:register-name/entry "NAME/ENTRY" :PACKAGE)'\`
-  where `PACKAGE` is the current package.
+  where \`PACKAGE\` is the current package.
   See the documentation of said library for further details.
 
-* If option \`-Ds --dispatch-system` is used with \`SYSTEM\` as its argument,
+* If option \`-Ds --dispatch-system\` is used with \`SYSTEM\` as its argument,
   it is as if option \`-s --system\` had been used with the same argument,
   followed by option \`-DE --dispatch-entry\` for the basename of the system
   (last \`/\` (slash) separated component of the system name) and the function \`main\`
   in the package of the system, but without otherwise changing the current package.
 
-* If option \`-sm --system-main` is used with \`SYSTEM\` as its argument,
+* If option \`-sm --system-main\` is used with \`SYSTEM\` as its argument,
   it is as if option \`-s --system\` had been used with the same argument,
   followed by option \`-E --entry\` with the \`main\` function
   in the package of the system, but without otherwise changing the current package.
