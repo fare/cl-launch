@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper for Common Lisp -*- Lisp -*-
-CL_LAUNCH_VERSION='4.1.2.1'
+CL_LAUNCH_VERSION='4.1.2.2'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -308,26 +308,15 @@ at which point it happens when you invoke the executable output file:
   if multiple are provided, the last one provided overrides previous ones.
   If you want several functions to be called, you may \`DEFUN\` one that calls
   them and use it as a restart, or you may use multiple init forms as below.
+  See also below options `-DE --dispatch-entry`, \`-sm --system-main\`,
+  \`-Ds --dispatch-system\` that behave as if `-E --entry` had been specified
+  among other things.
 * If neither restart nor entry function is provided, the program will exit with
   status \`0\` (success). If a function was provided, the program will exit
   after the function returns (if it returns), with status \`0\` if and only if
   the primary return value of result is generalized boolean true, and
   with status 1 if this value is \`NIL\`.
   See documentation for \`UIOP:RESTORE-IMAGE\` for details.
-* If option \`-DE --dispatch-entry\` is used, then the next argument must follow
-  the format \`NAME/ENTRY\`, where \`NAME\` is a name that the program may be
-  invoked as (the basename of the \`uiop:argv0\` argument), and \`ENTRY\` is
-  a function to be invoked as if by --entry when that is the case.
-  Support for option \`-DE --dispatch-entry\` is delegated to a dispatch library,
-  distributed with \`cl-launch\` but not part of \`cl-launch\` itself, by
-  (1) registering a dependency on the dispatch library as if
-  \`--system cl-launch-dispatch\` had been specified (if not already)
-  (2) if neither \`--restart\` nor \`--entry\` was specified yet, registering a
-  default entry function as if by \`--entry cl-launch-dispatch:dispatch-entry\`.
-  (3) registering an init-form that registers the dispatch entry as if
-  \`(cl-launch-dispatch:register-name/entry "NAME/ENTRY" :PACKAGE)\` had been
-  specified where PACKAGE is the current package.
-  See the documentation of said library for further details.
 
 The current package can be controlled by option \`-p --package\` and its variant
 \`-sp --system-package\` that also behaves like \`-s --system\`.
@@ -342,6 +331,42 @@ may be evaluated consecutively after a package has been changed, and that
 if one of these form itself modifies the package, or some other syntax control
 mechanism such as the reader, it may adversely affect later forms in the same
 category, but not those in other categories (if reached).
+
+
+The following derived options work as if by a combination of simpler options:
+
+* As mentioned above, option \`-sp --system-package\` combines \`--system\` and
+  \`--package\` in one option, so that given the argument \`SYSTEM\`, the system
+  is loaded as if by \`--system SYSTEM\` that creates a package \`SYSTEM\` that
+  then becomes the current package.
+
+* If option \`-DE --dispatch-entry\` is used, then the next argument must follow
+  the format \`NAME/ENTRY\`, where \`NAME\` is a name that the program may be
+  invoked as (the basename of the \`uiop:argv0\` argument), and \`ENTRY\` is
+  a function to be invoked as if by `--entry` when that is the case.
+  If the \`ENTRY\` is left out, function \`main\` in current package is used.
+  Support for option \`-DE --dispatch-entry\` is delegated to a dispatch library,
+  distributed with \`cl-launch\` but not part of \`cl-launch\` itself, by
+  (1) registering a dependency on the dispatch library as if by
+  \`--system cl-launch-dispatch\` (if not already)
+  (2) if neither \`--restart\` nor \`--entry\` was specified yet, registering a
+  default entry function as if by \`--entry cl-launch-dispatch:dispatch-entry\`.
+  (3) registering a build-form that registers the dispatch entry as if by
+  \`--eval '(cl-launch-dispatch:register-name/entry "NAME/ENTRY" :PACKAGE)'\`
+  where `PACKAGE` is the current package.
+  See the documentation of said library for further details.
+
+* If option \`-Ds --dispatch-system` is used with \`SYSTEM\` as its argument,
+  it is as if option \`-s --system\` had been used with the same argument,
+  followed by option \`-DE --dispatch-entry\` for the basename of the system
+  (last \`/\` (slash) separated component of the system name) and the function \`main\`
+  in the package of the system, but without otherwise changing the current package.
+
+* If option \`-sm --system-main` is used with \`SYSTEM\` as its argument,
+  it is as if option \`-s --system\` had been used with the same argument,
+  followed by option \`-E --entry\` with the \`main\` function
+  in the package of the system, but without otherwise changing the current package.
+
 
 General note on \`cl-launch\` invocation:
 options are processed from left to right;
@@ -949,7 +974,7 @@ show_version () {
   echo "cl-launch ${CL_LAUNCH_VERSION}
 
 Supported implementations:
-    sbcl, cmucl (lisp), clisp, ecl, ccl (openmcl), abcl,
+    sbcl, cmucl (lisp), clisp, ecl, ccl (openmcl), abcl, mkcl,
     xcl, gcl (gclcvs), allegro (alisp), lispworks, scl
 
 Local defaults for generated scripts:
@@ -1058,7 +1083,7 @@ process_options () {
       -f|--file)
         add_build_form "(:load t :$PACKAGE)" ; set_lisp_content "$1" ; shift ;;
       -s|--system|--load-system)
-        add_build_form "(:load-system \"$1\")" ; shift ;;
+        add_build_form "(:load-system \"$(kwote "$1")\")" ; shift ;;
       --require)
         add_build_form "(:require \"$(kwote "$1")\")" ; shift ;;
       -F|--final)
@@ -1119,15 +1144,15 @@ process_options () {
       -E|--entry)
         set_restart "(lambda()($1 uiop:*command-line-arguments*))" ; shift ;;
       -DE|--dispatch-entry)
-        if [ -z "$DISPATCH_ENTRY_P" ] ; then
-          add_build_form "(:load-system \"cl-launch-dispatch\")"
-          DISPATCH_ENTRY_P=t
-        fi
-        if [ -z "$RESTART" ] ; then
-          set_entry "cl-launch-dispatch:dispatch-entry"
-        fi
-        add_init_form "(cl-launch-dispatch:register-name/entry \"$(kwote "$1")\" :$PACKAGE)"
+        add_dispatch_entry "$1" "$PACKAGE"
         shift ;;
+      -sm|--system-main)
+        add_build_form "(:load-system \"$(kwote "$1")\")"
+        set_entry "$1::main" ; shift ;;
+      -Ds|--dispatch-system)
+        sys="$(kwote "$1")"
+        add_build_form "(:load-system \"$sys\")"
+        add_dispatch_entry "$(basename $sys)" "$sys" ; shift ;;
       -B|--backdoor)
         "$@" ; exit ;;
       --)
@@ -1185,6 +1210,16 @@ set_restart () {
 }
 set_entry () {
   set_restart "(cl:lambda()($1 uiop:*command-line-arguments*))"
+}
+add_dispatch_entry () {
+  if [ -z "$DISPATCH_ENTRY_P" ] ; then
+    add_build_form "(:load-system \"cl-launch-dispatch\")"
+    DISPATCH_ENTRY_P=t
+  fi
+  if [ -z "$RESTART" ] ; then
+    set_entry "cl-launch-dispatch:dispatch-entry"
+  fi
+  add_build_form "(:eval \"$(kwote "(cl-launch-dispatch:register-name/entry \"$(kwote "$1")\" :$2)")\")"
 }
 add_build_form () {
         SOFTWARE_BUILD_FORMS="$SOFTWARE_BUILD_FORMS${SOFTWARE_BUILD_FORMS+

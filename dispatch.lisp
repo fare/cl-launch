@@ -18,13 +18,15 @@
 (defun dispatch-entry-error (format &rest arguments)
   (error 'dispatch-entry-error :format-control format :format-arguments arguments))
 
-(defun split-name/entry (name/entry &optional (package *package*))
+;; TODO: shall we default the name of the entry point to main?
+(defun split-name/entry (name/entry &optional (package *package*) (default-entry "main"))
   "split name and entry from a name-entry specification"
-  (if-let ((slash (position #\/ name/entry)))
-    (values (let ((name (subseq name/entry 0 slash)))
-	      (and (not (emptyp name)) name))
-	    (ensure-function (subseq name/entry (1+ slash)) :package package))
-    (dispatch-entry-error "malformed entry ~S" name/entry)))
+  (flet ((f (name entry)
+           (values (and (not (emptyp name)) name)
+                   (ensure-function entry :package package))))
+    (if-let ((slash (position #\/ name/entry)))
+      (f (subseq name/entry 0 slash) (subseq name/entry (1+ slash)))
+      (f name/entry default-entry))))
 
 (defun register-entry (name entry)
   (if name
@@ -32,7 +34,7 @@
       (setf *default-behavior* entry)))
 
 (defun register-name/entry (name/entry &optional (package *package*))
-  (multiple-value-call 'register-entry (split-name/entry name/entry)))
+  (multiple-value-call 'register-entry (split-name/entry name/entry package)))
 
 (defun get-entry (name)
   "Given a string NAME, return the dispatch entry registered for that NAME.
