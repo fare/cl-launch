@@ -1,40 +1,37 @@
-#!/bin/sh
 #| -*- Lisp -*-
-#!/usr/bin/cl -s inferior-shell -s optima.ppcre -E cl-launch-release::main
-exec "$(dirname $0)/cl-launch.sh" \
-  --system inferior-shell --system optima.ppcre \
-  -X --package cl-launch-release --entry main -- "$0" "$@" ; exit
+#!/usr/bin/cl -sm cl-launch/release
+exec "$(dirname $0)/cl-launch.sh" -X --system-main cl-launch/release -- "$0" "$@" ; exit
 |#
-(defpackage :cl-launch-release
+(defpackage :cl-launch/release
   (:use :cl :uiop :asdf :inferior-shell :optima :optima.ppcre)
-  ;; Note: the exports are the list of available commands.
-  (:export #:rep #:clean
+  ;; Note: these exports are also the list of available commands.
+  (:export #:rep #:clean #:manpage
            #:source #:quickrelease
            #:debian-package #:publish-debian-package #:debian-package-all))
 
-(in-package :cl-launch-release)
+(in-package :cl-launch/release)
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (unless (fboundp 'argv0) (defun argv0 () "release.lisp")) ;; only in ASDF 3.1.2 or later
   (flet ((check-system-version (name version)
            (let ((system (find-system name)))
              (unless (version-satisfies system version)
                (die 2 "~A requires ~A at least ~A but only got version ~A"
                     (argv0) name version (component-version system))))))
-    (check-system-version "inferior-shell" "2.0.0"))) ;; for default run outputs
+    (check-system-version "asdf" "3.1.2") ;; for package-inferred-system, uiop:argv0
+    (check-system-version "inferior-shell" "2.0.3"))) ;; for default run outputs, on-error error.
 
 (defvar *cl-launch-directory* ;; interactive users may want to override that.
   (truenamize
    (pathname-directory-pathname
     (ensure-absolute-pathname
-     (or (argv0) *load-pathname* (nil-pathname)) #'getcwd))))
+     (or (argv0) *compile-file-pathname* *load-pathname* (nil-pathname)) #'getcwd))))
 
 (defun pn (&optional x)
   (subpathname *cl-launch-directory* x))
 
 (defun rep (argument)
   ;; read-eval-print, no loop.
-  (eval-input (strcat "(in-package :cl-launch-release) " argument)))
+  (eval-input (strcat "(in-package :cl-launch/release) " argument)))
 
 (defun script-version ()
   (match (read-file-line (pn "cl-launch.sh") :at 2)
@@ -73,6 +70,7 @@ exec "$(dirname $0)/cl-launch.sh" \
          (home (user-homedir-pathname))
          (cl-launch-version (strcat "cl-launch-" version))
          (cldir (subpathname home "files/cl-launch/")))
+    (check-manual)
     (with-current-directory ((pn))
       (run `(pwd) :show t)
       (clean)
@@ -111,14 +109,56 @@ exec "$(dirname $0)/cl-launch.sh" \
   (values))
 
 (defun source ()
-  (with-current-directory ()
+  (with-current-directory ((pn))
     (run `(./cl-launch.sh --include ,(getcwd) "-B" install_path))))
+
+(defparameter *months* #("January" "February" "March" "April" "May" "June"
+                         "July" "August" "September" "October" "November" "December"))
+
+(defun get-date-from-manual ()
+  (with-current-directory ((pn))
+    (match (first (run/lines `(./cl-launch.sh --help)))
+      ((ppcre "\"[(]([A-Z][a-z]+) ([0-9]+)[)]\"" month year)
+       (if-let (pos (position month *months* :test 'equal))
+         (list (parse-integer year) (1+ pos))
+         (error "Invalid month ~a" month)))
+      (_ (error "Can't extract month from manual")))))
+
+(defun get-date-from-git (&optional tag)
+  (with-current-directory ((pn))
+    (match (first (run/lines `(git log -1 "--pretty=format:%cI" ,tag)))
+      ((ppcre "^([0-9]+)-([0-9]+)-([0-9]+)T" year month day)
+       (list (parse-integer year) (parse-integer month) (parse-integer day))))))
+
+(defun check-manual-git-dates-match ()
+  (let ((date-from-manual (get-date-from-manual))
+        (date-from-git (subseq (get-date-from-git) 0 2)))
+    (assert (equal date-from-manual date-from-git) ()
+            "Manual says it's from ~{~D-~2,'0D~} but git commit is from ~{~D-~2,'0D~}"
+            date-from-manual date-from-git)))
+
+(defun manpage ()
+  (check-manual-git-dates-match)
+  (with-current-directory ((pn))
+    (run `(ln -sf cl-launch.sh cl))
+    (run `(env ("PATH=.:" ,(getenv "PATH")) cl --more-help (> cl-launch.1.md)))
+    (run `(ronn "--roff" "--manual=Shell Scripting with Common Lisp"
+                "--organization=Francois-Rene Rideau"
+                ,(format nil "--date=~{~D-~2,'0D-~2,'0D~}" (get-date-from-git))
+                cl-launch.1.md (> 2 /dev/null)))))
+
+(defun check-manual ()
+  (check-manual-git-dates-match)
+  (manpage)
+  (with-current-directory ((pn))
+    (run `(cmp ./cl-launch.1 ./debian/cl-launch.1))))
 
 (defun quickrelease ()
   (let* ((version (script-version)) ;; no need to compare with the debian version
          (link (strcat "cl-launch-" version))
          (tarball (strcat link ".tar.gz")))
-    (with-current-directory ()
+    (check-manual)
+    (with-current-directory ((pn))
       (clean)
       (source))
     (with-current-directory ((pn "../"))
@@ -137,11 +177,11 @@ exec "$(dirname $0)/cl-launch.sh" \
   (publish-debian-package))
 
 (defun valid-commands ()
-  (sort (while-collecting (c) (do-external-symbols (x :cl-launch-release) (c x))) #'string<))
+  (sort (while-collecting (c) (do-external-symbols (x :cl-launch/release) (c x))) #'string<))
 
 (defun main (argv)
   (multiple-value-bind (command status)
-      (find-symbol (string-upcase (first argv)) :cl-launch-release)
+      (find-symbol (string-upcase (first argv)) :cl-launch/release)
     (if (eq status :external)
         (format t "~@[~{~S~^ ~}~%~]" (multiple-value-list (apply command (rest argv))))
         (die 2 "~A ~:[requires a command~;doesn't recognize command ~:*~A~].~%Try one of: ~(~{~A~^ ~}~)~%"

@@ -12,8 +12,8 @@ Package: cl-launch
 Architecture: all
 Depends: ${misc:Depends}
 Suggests: cl-asdf (>= 2:3.1.4)
-Recommends: sbcl (>= 1:1.1.10), cl-asdf (>= 2:3.1.1)
-Breaks: cl-asdf (<< 2:3.0.1), common-lisp-controller (<= 7.2)
+Recommends: sbcl (>= 1:1.2.3), cl-asdf (>= 2:3.1.2)
+Breaks: cl-asdf (<< 2:3.1.1), common-lisp-controller (<= 7.2)
 Description: uniform frontend to running Common Lisp code from the shell
  CL-Launch will allow you to invoke Common Lisp source code from the shell
  command line, from a shell script or as a Common Lisp script. It will also

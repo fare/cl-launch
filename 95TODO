@@ -1,4 +1,4 @@
-TODO for cl-launch as of 4.1.2
+TODO for cl-launch as of 4.1.3
 
 * When resuming from an image then dumping another, the INCLUDE_PATH
    becomes a very bad variable to look for the image.
@@ -68,14 +68,8 @@ TODO for cl-launch as of 4.1.2
    When starting cl-launch, I experience a pause of ~1s.
    Half of it is loading the asdf fasl, then the upgraded asdf fasl.
    The other half is scanning the source registry.
-   At least this scanning can be sped up, by patching ASDF
-   to support a source-registry cache or something.
-
-* Improve release script to check and/or update that the date in
-   cl-launch.sh matches the date of the commit being released,
-   and generate cl-launch.1 from it using something.
-   pandoc? Ugly. ronn? Looks OK, if we replace its first lines
-   by our first line.
+   At least this scanning can be sped up, using ASDF 3.1.4's
+   tools/cl-source-registry-cache.lisp
 
 * Use #+sbcl (setf sb-ext:*evaluator-mode* :interpret)
    and a series of (declaim (optimize (speed 0) (size 0) (debug 0)

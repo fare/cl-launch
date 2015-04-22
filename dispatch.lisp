@@ -1,11 +1,11 @@
-(defpackage :cl-launch-dispatch
+(defpackage :cl-launch/dispatch
   (:use :uiop :cl)
   (:export #:dispatch-entry #:get-entry
 	   #:register-name/entry #:register-entry
 	   #:dispatch-entry-error #:get-name #:basename #:all-entry-names
 	   #:dispatcher #:not-found))
 
-(in-package :cl-launch-dispatch)
+(in-package :cl-launch/dispatch)
 
 (defvar *default-behavior* 'dispatcher
   "the default behavior if the argv0 invocation name is not recognized.")

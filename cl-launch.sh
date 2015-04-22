@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper for Common Lisp -*- Lisp -*-
-CL_LAUNCH_VERSION='4.1.2.2'
+CL_LAUNCH_VERSION='4.1.3'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -88,7 +88,7 @@ PROGBASE="${0##*/}" # "$(basename "$0")"
 
 CL_LAUNCH_URL="http://fare.tunes.org/files/cl-launch/cl-launch.sh"
 
-HELP_HEADER="cl-launch.sh $CL_LAUNCH_VERSION \"(March 2015)\" \"Francois-Rene Rideau's\" \"shell wrapper for Common Lisp\""
+HELP_HEADER="cl-launch.sh $CL_LAUNCH_VERSION \"(April 2015)\" \"Francois-Rene Rideau's\" \"shell wrapper for Common Lisp\""
 print_help_header () {
   ECHO "$HELP_HEADER"
   ECHO "============"
@@ -176,8 +176,8 @@ EOF
 }
 print_more_help () {
 cat<<EOF
-Invocation of \`cl-launch\`
--------------------------
+Invocation of cl-launch
+-----------------------
 
 \`cl-launch\` will evaluate Common Lisp code or create shell scripts or
 executable binaries that evaluate Common Lisp code. cl-launch follows
@@ -194,7 +194,7 @@ Recent Linux kernels support a script interpreter itself being a script;
 BSD kernels don't and require a small C program cl-shim to be compiled and
 installed as /usr/bin/cl to use cl-launch this way.
 
-To work properly, \`cl-launch\` 4.0.8 depends on \`ASDF\` 3.0.1 or later, and
+To work properly, \`cl-launch\` 4.1.3 depends on \`ASDF\` 3.1.2 or later, and
 on its portability layer \`UIOP\`, to manage compilation and image life cycle.
 
 The software is specified as the evaluation of code in several phases;
@@ -207,7 +207,7 @@ In the first phase, the Lisp image is initialized:
   (option \`-I --image\`)
 * loading a small header of code that provides common \`cl-launch\` functionality
 * loading \`ASDF3\`.
-  The \`cl-launch\` header will try hard to load \`ASDF 3.0.1\` or later.
+  The \`cl-launch\` header will try hard to load \`ASDF 3.1.2\` or later.
   If your implementation does not provide it via \`(require "asdf")\`,
   you can configure your implementation's \`ASDF\` (if any) to find it.
   Or you can put it in your home, under \`~/common-lip/asdf/\`
@@ -308,8 +308,8 @@ at which point it happens when you invoke the executable output file:
   if multiple are provided, the last one provided overrides previous ones.
   If you want several functions to be called, you may \`DEFUN\` one that calls
   them and use it as a restart, or you may use multiple init forms as below.
-  See also below options `-DE --dispatch-entry`, \`-sm --system-main\`,
-  \`-Ds --dispatch-system\` that behave as if `-E --entry` had been specified
+  See also below options \`-DE --dispatch-entry\`, \`-sm --system-main\`,
+  \`-Ds --dispatch-system\` that behave as if \`-E --entry\` had been specified
   among other things.
 * If neither restart nor entry function is provided, the program will exit with
   status \`0\` (success). If a function was provided, the program will exit
@@ -343,16 +343,16 @@ The following derived options work as if by a combination of simpler options:
 * If option \`-DE --dispatch-entry\` is used, then the next argument must follow
   the format \`NAME/ENTRY\`, where \`NAME\` is a name that the program may be
   invoked as (the basename of the \`uiop:argv0\` argument), and \`ENTRY\` is
-  a function to be invoked as if by `--entry` when that is the case.
+  a function to be invoked as if by \`--entry\` when that is the case.
   If the \`ENTRY\` is left out, function \`main\` in current package is used.
   Support for option \`-DE --dispatch-entry\` is delegated to a dispatch library,
   distributed with \`cl-launch\` but not part of \`cl-launch\` itself, by
   (1) registering a dependency on the dispatch library as if by
-  \`--system cl-launch-dispatch\` (if not already)
+  \`--system cl-launch/dispatch\` (if not already)
   (2) if neither \`--restart\` nor \`--entry\` was specified yet, registering a
-  default entry function as if by \`--entry cl-launch-dispatch:dispatch-entry\`.
+  default entry function as if by \`--entry cl-launch/dispatch:dispatch-entry\`.
   (3) registering a build-form that registers the dispatch entry as if by
-  \`--eval '(cl-launch-dispatch:register-name/entry "NAME/ENTRY" :PACKAGE)'\`
+  \`--eval '(cl-launch/dispatch:register-name/entry "NAME/ENTRY" :PACKAGE)'\`
   where \`PACKAGE\` is the current package.
   See the documentation of said library for further details.
 
@@ -1213,13 +1213,13 @@ set_entry () {
 }
 add_dispatch_entry () {
   if [ -z "$DISPATCH_ENTRY_P" ] ; then
-    add_build_form "(:load-system \"cl-launch-dispatch\")"
+    add_build_form "(:load-system \"cl-launch/dispatch\")"
     DISPATCH_ENTRY_P=t
   fi
   if [ -z "$RESTART" ] ; then
-    set_entry "cl-launch-dispatch:dispatch-entry"
+    set_entry "cl-launch/dispatch:dispatch-entry"
   fi
-  add_build_form "(:eval \"$(kwote "(cl-launch-dispatch:register-name/entry \"$(kwote "$1")\" :$2)")\")"
+  add_build_form "(:eval \"$(kwote "(cl-launch/dispatch:register-name/entry \"$(kwote "$1")\" :$2)")\")"
 }
 add_build_form () {
         SOFTWARE_BUILD_FORMS="$SOFTWARE_BUILD_FORMS${SOFTWARE_BUILD_FORMS+
@@ -1746,7 +1746,9 @@ print_cl_launch_asd () {
 ;; If the initial ASDF isn't, you're likely in trouble.
 ;;
 (asdf:defsystem :cl-launch
-  :depends-on ((:version "asdf" "3.0.1")) ; we need UIOP, included in ASDF 3 and later
+  :defsystem-depends-on ("asdf-package-system")
+  :class :package-inferred-system
+  :depends-on ((:version "asdf" "3.1.2")) ; we want some recent enough ASDF and UIOP
   :licence "MIT"
   :components ((:file "launcher")))
 END
@@ -2287,7 +2289,7 @@ NIL
   ;; only if ASDF 3 is in a predictable place under the user's homedir, thus
   ;; ~/common-lisp/asdf/ or ~/.local/share/common-lisp/source/asdf/ only.
   (block nil
-    (let ((required-asdf-version  "3.0.1")
+    (let ((required-asdf-version  "3.1.2")
           (verbose *load-verbose*))
       (labels ((asdf-symbol (name)
                  (and (find-package :asdf) (find-symbol (string name) :asdf)))
@@ -2349,8 +2351,8 @@ NIL
                   ;; Most implementations provide ASDF, but while most of them are case-insensitive,
                   ;; CLISP is case-sensitive, so we need to specify a lowercase string,
                   ;; and not the keyword :asdf or symbol 'asdf.
-                  ;; Most implementations provide ASDF 3, but some of them only ASDF 2
-                  ;; and antique versions only ASDF 1.
+                  ;; Most recent implementations provide ASDF 3, but some of them only ASDF 2
+                  ;; and antique versions only of ASDF 1.
                   #'(lambda () (funcall 'require "asdf")))
                  (try-file-stage-1 "asdf" "default (visible)" (user-homedir-pathname)
                                    "~/" '("common-lisp"))
@@ -2412,8 +2414,8 @@ NIL
 ":" 't #-cl-launch ;'; cl_fragment<<'NIL'
 ;; Because of ASDF upgrade punting, this ASDF package may be a new one.
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (unless (or #+asdf2 (asdf:version-satisfies (asdf:asdf-version) "3.0.1"))
-    (error "cl-launch requires ASDF 3.0.1 or later (3.1.1 for dumping images)")))
+  (unless (or #+asdf2 (asdf:version-satisfies (asdf:asdf-version) "3.1.2"))
+    (error "cl-launch requires ASDF 3.1.2 or later")))
 NIL
 ":" 't #-cl-launch ;'; cl_fragment<<'NIL'
 ;;;; Create cl-launch with UIOP.

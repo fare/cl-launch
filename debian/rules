@@ -44,7 +44,7 @@ install: build
 	dh_installdirs -p ${debpkg} $(include_dir) $(doc-dir)
 	dh_install -i cl-launch usr/bin
 	dh_install -i launcher.lisp wrapper.sh cl-launch.asd build.xcvb \
-		cl-launch-dispatch.asd dispatch.lisp ${include_dir}
+		dispatch.lisp ${include_dir}
 	dh_installman -i debian/*.1
 
 
