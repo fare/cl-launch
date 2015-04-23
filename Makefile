@@ -66,7 +66,7 @@ clean:
 
 mrproper: clean
 
-debian-package: mrproper
+debian-package: source
 	./release.lisp debian-package
 
 # This fits my own system. YMMV. Try make install for a more traditional install
@@ -96,7 +96,7 @@ push:
 	git fetch
 	git status
 
-debian-package-all:
+debian-package-all: source
 	./release.lisp debian-package-all
 
 quickrelease: reinstall_here
