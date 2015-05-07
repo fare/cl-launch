@@ -7,6 +7,7 @@ exec "$(dirname $0)/cl-launch.sh" -X --system-main cl-launch/release -- "$0" "$@
   ;; Note: these exports are also the list of available commands.
   (:export #:rep #:clean #:manpage
            #:source #:quickrelease
+           #:get-date-from-git #:check-manual
            #:debian-package #:publish-debian-package #:debian-package-all))
 
 (in-package :cl-launch/release)
@@ -115,7 +116,7 @@ exec "$(dirname $0)/cl-launch.sh" -X --system-main cl-launch/release -- "$0" "$@
 (defparameter *months* #("January" "February" "March" "April" "May" "June"
                          "July" "August" "September" "October" "November" "December"))
 
-(defun get-date-from-manual ()
+(defun get-date-from-manual () ;; Note: we don't put the date there anymore.
   (with-current-directory ((pn))
     (match (first (run/lines `(./cl-launch.sh --help)))
       ((ppcre "\"[(]([A-Z][a-z]+) ([0-9]+)[)]\"" month year)
@@ -138,7 +139,7 @@ exec "$(dirname $0)/cl-launch.sh" -X --system-main cl-launch/release -- "$0" "$@
             date-from-manual date-from-git)))
 
 (defun manpage ()
-  (check-manual-git-dates-match)
+  ;;(check-manual-git-dates-match)
   (with-current-directory ((pn))
     (run `(ln -sf cl-launch.sh cl))
     (run `(env ("PATH=.:" ,(getenv "PATH")) cl --more-help (> cl-launch.1.md)))
@@ -148,7 +149,7 @@ exec "$(dirname $0)/cl-launch.sh" -X --system-main cl-launch/release -- "$0" "$@
                 cl-launch.1.md (> 2 /dev/null)))))
 
 (defun check-manual ()
-  (check-manual-git-dates-match)
+  ;;(check-manual-git-dates-match)
   (manpage)
   (with-current-directory ((pn))
     (run `(cmp ./cl-launch.1 ./debian/cl-launch.1))))

@@ -24,6 +24,9 @@ install_source:
 	@echo "Installing Lisp source code for cl-launch in ${INSTALL_SOURCE}"
 	@mkdir -p ${INSTALL_SOURCE}/
 	@${CL_LAUNCH} --include ${INSTALL_SOURCE} -B install_path > /dev/null
+	@if [ ! $${PWD} = ${INSTALL_SOURCE} ] ; then \
+		@cp dispatch.lisp ${INSTALL_SOURCE}/ ; \
+	fi
 
 install_system: install_source
 	@echo "Linking .asd file for cl-launch into ${INSTALL_SYSTEMS}/"

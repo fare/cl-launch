@@ -1,7 +1,7 @@
 .\" generated with Ronn/v0.7.3
 .\" http://github.com/rtomayko/ronn/tree/0.7.3
 .
-.TH "CL\-LAUNCH" "1" "April 2015" "Francois-Rene Rideau" "Shell Scripting with Common Lisp"
+.TH "CL\-LAUNCH" "1" "May 2015" "Francois-Rene Rideau" "Shell Scripting with Common Lisp"
 .
 .SH "Name"
 cl\-launch \- shell wrapper for Common Lisp
@@ -53,12 +53,12 @@ cl [options] \-\-output EXECUTABLE [options]
 \-sp SP      \-\-system\-package SP  combination of \-s SP and \-p SP
 \-e FORM     \-\-eval FORM          evaluate FORM while building
             \-\-require MODULE     require MODULE while building
-\-r FUNC     \-\-restart FUNC       restart from build by calling (FUNC)
-\-E FUNC     \-\-entry FUNC         restart from build by calling (FUNC argv)
 \-DE N/F  \-\-dispatched\-entry N/F  if exec\'ed as N, restart from (F argv)
-\-i FORM     \-\-init FORM          evaluate FORM after restart
-\-ip FORM    \-\-print FORM         evaluate and princ FORM after restart
-\-iw FORM    \-\-write FORM         evaluate and write FORM after restart
+\-i FORM     \-\-init FORM          evaluate FORM at restart
+\-ip FORM    \-\-print FORM         evaluate and princ FORM at restart
+\-iw FORM    \-\-write FORM         evaluate and write FORM at restart
+\-r FUNC     \-\-restart FUNC       complete restart by calling (FUNC)
+\-E FUNC     \-\-entry FUNC         complete restart by calling (FUNC argv)
 \-F FORM     \-\-final FORM         evaluate FORM before dumping IMAGE
 \-I PATH     \-\-include PATH       runtime PATH to cl\-launch installation
 +I          \-\-no\-include         disable cl\-launch installation feature
@@ -166,7 +166,7 @@ Hooks from \fBASDF3\fR\'s \fBUIOP:*IMAGE\-RESTORE\-HOOK*\fR are called (in FIFO 
 a series of \fBFORMS\fR specified via options \fB\-i \-\-init\fR, \fB\-ip \-\-print\fR, \fB\-iw \-\-write\fR, stored as a text string, are read and evaluated in order of appearance, each in the context of the package that was current at the time it was requested\. (Concatenated together with separating whitespace, these forms constitute the \fBUIOP:*IMAGE\-PRELUDE*\fR as handled by \fBRESTORE\-IMAGE\fR)\. Arguments that start with an open parenthesis are assumed to be \fBFORMS\fR that follow an implicit \fB\-\-print\fR\. Loading from a stream means you don\'t have to worry about nasty read\-time issues; forms will be read by the fully built Lisp image; however it also means that if you care a lot about the very last drop of startup delay when invoking a dumped image, you\'ll only use option \fB\-r \-\-restart\fR or \fB\-E \-\-entry\fR and avoid using \fB\-\-init\fR and its variants\. Option \fB\-ip \-\-print\fR specifies \fBFORMS\fR such that the result of the last form will be printed as if by \fBPRINC\fR, followed by a newline\. Option \fB\-iw \-\-write\fR is similar to \fB\-\-print\fR, using \fBWRITE\fR instead of \fBPRINC\fR\.
 .
 .IP "\(bu" 4
-An optional \fBFUNCTION\fR provided option \fB\-r \-\-restart\fR or \fB\-E \-\-entry\fR is invoked\. If the function was provided with option \fB\-r \-\-restart\fR (compatible with earlier versions of \fBcl\-launch\fR), it will be called with no argument\. If it was provided with option \fB\-E \-\-entry\fR (compatible with \fBbuildapp\fR), it will be called with one argument, being the list of arguments passed to the program, not including \fBargv[0]\fR, which is available on most implementations via the function \fBuiop:argv0\fR (available in \fBASDF\fR 3\.1\.2 and later)\. Using either option, the argument may be a function name or a lambda expression, that is read from the current package (see below option \fB\-p \-\-package\fR and \fB\-sp \-\-system\-package\fR)\. Only one restart or entry function may be specified; if multiple are provided, the last one provided overrides previous ones\. If you want several functions to be called, you may \fBDEFUN\fR one that calls them and use it as a restart, or you may use multiple init forms as below\. See also below options \fB\-DE \-\-dispatch\-entry\fR, \fB\-sm \-\-system\-main\fR, \fB\-Ds \-\-dispatch\-system\fR that behave as if \fB\-E \-\-entry\fR had been specified among other things\.
+An optional \fBFUNCTION\fR provided option \fB\-r \-\-restart\fR or \fB\-E \-\-entry\fR is invoked after all init forms\. If the function was provided with option \fB\-r \-\-restart\fR (compatible with earlier versions of \fBcl\-launch\fR), it will be called with no argument\. If it was provided with option \fB\-E \-\-entry\fR (compatible with \fBbuildapp\fR), it will be called with one argument, being the list of arguments passed to the program, not including \fBargv[0]\fR, which is available on most implementations via the function \fBuiop:argv0\fR (available in \fBASDF\fR 3\.1\.2 and later)\. Using either option, the argument may be a function name or a lambda expression, that is read from the current package (see below option \fB\-p \-\-package\fR and \fB\-sp \-\-system\-package\fR)\. Only one restart or entry function may be specified; if multiple are provided, the last one provided overrides previous ones\. If you want several functions to be called, you may \fBDEFUN\fR one that calls them and use it as a restart, or you may use multiple init forms as below\. See also below options \fB\-DE \-\-dispatch\-entry\fR, \fB\-sm \-\-system\-main\fR, \fB\-Ds \-\-dispatch\-system\fR that behave as if \fB\-E \-\-entry\fR had been specified among other things\.
 .
 .IP "\(bu" 4
 If neither restart nor entry function is provided, the program will exit with status \fB0\fR (success)\. If a function was provided, the program will exit after the function returns (if it returns), with status \fB0\fR if and only if the primary return value of result is generalized boolean true, and with status 1 if this value is \fBNIL\fR\. See documentation for \fBUIOP:RESTORE\-IMAGE\fR for details\.

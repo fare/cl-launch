@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper for Common Lisp -*- Lisp -*-
-CL_LAUNCH_VERSION='4.1.3'
+CL_LAUNCH_VERSION='4.1.3.1'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -88,10 +88,12 @@ PROGBASE="${0##*/}" # "$(basename "$0")"
 
 CL_LAUNCH_URL="http://fare.tunes.org/files/cl-launch/cl-launch.sh"
 
-HELP_HEADER="cl-launch.sh $CL_LAUNCH_VERSION \"(April 2015)\" \"Francois-Rene Rideau's\" \"shell wrapper for Common Lisp\""
+HELP_HEADER="cl-launch.sh $CL_LAUNCH_VERSION"
 print_help_header () {
   ECHO "$HELP_HEADER"
-  ECHO "============"
+  i=0 ; while [ "$i" -lt "${#HELP_HEADER}" ] ; do
+    ECHOn "=" ; i="$[$i+1]"
+  done ; ECHO
 }
 print_help () {
 cat <<EOF
@@ -136,12 +138,12 @@ Software specification
     -sp SP      --system-package SP  combination of -s SP and -p SP
     -e FORM     --eval FORM          evaluate FORM while building
                 --require MODULE     require MODULE while building
-    -r FUNC     --restart FUNC       restart from build by calling (FUNC)
-    -E FUNC     --entry FUNC         restart from build by calling (FUNC argv)
     -DE N/F  --dispatched-entry N/F  if exec'ed as N, restart from (F argv)
-    -i FORM     --init FORM          evaluate FORM after restart
-    -ip FORM    --print FORM         evaluate and princ FORM after restart
-    -iw FORM    --write FORM         evaluate and write FORM after restart
+    -i FORM     --init FORM          evaluate FORM at restart
+    -ip FORM    --print FORM         evaluate and princ FORM at restart
+    -iw FORM    --write FORM         evaluate and write FORM at restart
+    -r FUNC     --restart FUNC       complete restart by calling (FUNC)
+    -E FUNC     --entry FUNC         complete restart by calling (FUNC argv)
     -F FORM     --final FORM         evaluate FORM before dumping IMAGE
     -I PATH     --include PATH       runtime PATH to cl-launch installation
     +I          --no-include         disable cl-launch installation feature
@@ -294,8 +296,8 @@ at which point it happens when you invoke the executable output file:
   Option \`-iw --write\` is similar to \`--print\`,
   using \`WRITE\` instead of \`PRINC\`.
 * An optional \`FUNCTION\` provided option \`-r --restart\` or \`-E --entry\`
-  is invoked. If the function was provided with option \`-r --restart\`
-  (compatible with earlier versions of \`cl-launch\`),
+  is invoked after all init forms. If the function was provided with option
+  \`-r --restart\` (compatible with earlier versions of \`cl-launch\`),
   it will be called with no argument. If it was provided with
   option \`-E --entry\` (compatible with \`buildapp\`), it will be called
   with one argument, being the list of arguments passed to the program,
