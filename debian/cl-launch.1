@@ -337,7 +337,7 @@ clisp:  GNU CLISP 2\.49
 ecl:  ECL 13\.5\.1
 cmucl:  CMUCL 20D
 ccl:  ClozureCL 1\.10
-lispworks:  LispWorks Professional 6\.1\.0  (no personal ed, banner)
+lispworks:  LispWorks Professional 7\.0\.0  (no personal ed, banner)
 .
 .fi
 .
@@ -379,21 +379,21 @@ xcl:  XCL 0\.0\.0\.291 (cannot dump an image) (get a recent checkout)
 There are some issues regarding standalone executables on \fBCLISP\fR\. See below in the section regarding \fIStandalone executables\fR\.
 .
 .P
-\fBLispWorks\fR requires the Professional Edition; the Personal Edition isn\'t supported as it won\'t let you either control the command line or dump images\. Dumped images will print a banner, unless you dump a standalone executable\. To dump an image, make sure you have a license file in your target directory and/or to \.\.\./lispworks/lib/6\-1\-0\-0/config/lwlicense (or use a trampoline shell script to \fBexec /path/to/lispworks "$@"\fR), create a build script with:
+\fBLispWorks\fR requires the Professional Edition; the Personal Edition isn\'t supported as it won\'t let you either control the command line or dump images\. Dumped images will print a banner, unless you dump a standalone executable\. To dump an image, make sure you have a license file in your target directory and/or to \.\.\./lispworks/lib/7\-0\-0\-0/config/lwlicense (or use a trampoline shell script to \fBexec /path/to/lispworks "$@"\fR), create a build script with:
 .
 .IP "" 4
 .
 .nf
 
    echo \'(hcl:save\-image "lispworks\-console" :environment nil)\' > si\.lisp
-   lispworks\-6\-1\-0\-x86\-linux \-siteinit \- \-init \- \-build si\.lisp
+   lispworks\-7\-0\-0\-x86\-linux \-siteinit \- \-init \- \-build si\.lisp
 .
 .fi
 .
 .IP "" 0
 .
 .P
-LispWorks also requires that you have \fBASDF 3\.1\.2\fR or later; make sure you have it installed and configured in your source registry\. There is no standard name for a console\-only variant of LispWorks; older versions of cl\-launch assume a default \fBlispworks\fR; since 4\.1\.2\.1, \fBlispworks\-console\fR is assumed instead, to avoid conflicts\. You can control the name you use with the shell variable \fB$LISPWORKS\fR, or you can just leave \fBlispworks\-console\fR in your path, and use a symlink, copy, shell alias or trivial wrapper script to enable your favorite shorter name \fBlispworks\fR, \fBlw\fR, \fBlwcon\fR, \fBlw\-console\fR, etc\.
+There is no standard name for a console\-only variant of LispWorks; older versions of cl\-launch assume a default \fBlispworks\fR; since cl\-launch 4\.1\.2\.1, \fBlispworks\-console\fR is assumed instead, to avoid conflicts\. You can control the name you use with the shell variable \fB$LISPWORKS\fR, or you can just leave \fBlispworks\-console\fR in your path, and use a symlink, copy, shell alias or trivial wrapper script to enable your favorite shorter name \fBlispworks\fR, \fBlw\fR, \fBlwcon\fR, \fBlw\-console\fR, etc\.
 .
 .P
 Similarly, a mlisp image for allegro can be created as follows:

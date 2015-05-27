@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper for Common Lisp -*- Lisp -*-
-CL_LAUNCH_VERSION='4.1.3.2'
+CL_LAUNCH_VERSION='4.1.3.3'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -573,7 +573,7 @@ Fully supported, including standalone executables:
     ecl:  ECL 13.5.1
     cmucl:  CMUCL 20D
     ccl:  ClozureCL 1.10
-    lispworks:  LispWorks Professional 6.1.0  (no personal ed, banner)
+    lispworks:  LispWorks Professional 7.0.0  (no personal ed, banner)
 
 Fully supported, but no standalone executables:
 
@@ -599,18 +599,16 @@ See below in the section regarding *Standalone executables*.
 supported as it won't let you either control the command line or dump images.
 Dumped images will print a banner, unless you dump a standalone executable.
 To dump an image, make sure you have a license file in your target directory
-and/or to .../lispworks/lib/6-1-0-0/config/lwlicense
+and/or to .../lispworks/lib/7-0-0-0/config/lwlicense
 (or use a trampoline shell script to \`exec /path/to/lispworks "\$@"\`),
 create a build script with:
 
        echo '(hcl:save-image "lispworks-console" :environment nil)' > si.lisp
-       lispworks-6-1-0-x86-linux -siteinit - -init - -build si.lisp
+       lispworks-7-0-0-x86-linux -siteinit - -init - -build si.lisp
 
-LispWorks also requires that you have \`ASDF 3.1.2\` or later;
-make sure you have it installed and configured in your source registry.
 There is no standard name for a console-only variant of LispWorks;
-older versions of cl-launch assume a default \`lispworks\`; since 4.1.2.1,
-\`lispworks-console\` is assumed instead, to avoid conflicts. You can
+older versions of cl-launch assume a default \`lispworks\`; since cl-launch
+4.1.2.1, \`lispworks-console\` is assumed instead, to avoid conflicts. You can
 control the name you use with the shell variable \`\$LISPWORKS\`, or you
 can just leave \`lispworks-console\` in your path, and use a symlink, copy,
 shell alias or trivial wrapper script to enable your favorite shorter name
@@ -1992,15 +1990,21 @@ implementation_gcl () {
   fi
 }
 implementation_lispworks () { ### NOT EXTENSIVELY TESTED
-  # http://www.lispworks.com/documentation/lw60/LW/html/lw-484.htm#pgfId-891723
+  # http://www.lispworks.com/documentation/lw70/LW/html/lw-203.htm
   USE_CLBUILD= implementation "${LISPWORKS:-lispworks-console}" || return 1
   OPTIONS="${LISPWORKS_OPTIONS:- -siteinit - -init -}" #
-  LOAD=-build #### way to avoid splash screen (?) and dump executable
-  # LOAD=-load
-  EVAL=-eval # Exists in LW 6.0,
-  #! ENDARGS="--"
+  # As of 7.0.0, LispWorks (still) fails to stop processing arguments with "--" or any marker.
+  # Therefore we can't "just" tuck arguments at the end of a command-line, and instead we use
+  # exec_lisp_file to create a script that initializes arguments and pass that to LispWorks.
+  # Since we don't use -eval, we use -build instead of -load to load the script. LispWorks
+  # calls all the -eval and -load in order, then the -siteinit, -init and finally -build.
+  # It's OK that we use -build, because using it eschews starting the graphical environment
+  # and initialization files even on a graphical image, and quits at the end;
+  # that should be redundant with the fact that even if using -load, cl-launch should quit
+  # before LispWorks gets to start a graphical environment, anyway.
+  EVAL=-eval # LOAD=-load EXEC_LISP=exec_lisp ENDARGS="--" ### FAIL by lack of ENDARGS
+  LOAD=-build EXEC_LISP=exec_lisp_file ENDARGS=
   IMAGE_ARG="EXECUTABLE_IMAGE" # we don't use this by default
-  EXEC_LISP=exec_lisp_file # for use with -build
   STANDALONE_EXECUTABLE=t
   BIN_ARG=LISPWORKS
   OPTIONS_ARG=LISPWORKS_OPTIONS
@@ -2414,7 +2418,7 @@ NIL
 ":" 't #-cl-launch ;'; cl_fragment<<'NIL'
 ;; Because of ASDF upgrade punting, this ASDF package may be a new one.
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (unless (or #+asdf2 (asdf:version-satisfies (asdf:asdf-version) "3.1.2"))
+  (unless (or #+asdf3 (uiop:version<= "3.1.2" (asdf:asdf-version)))
     (error "cl-launch requires ASDF 3.1.2 or later")))
 NIL
 ":" 't #-cl-launch ;'; cl_fragment<<'NIL'
@@ -2656,14 +2660,10 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
                    :entry-point ,(when restart
                                    `(lambda ()
                                       (funcall (ensure-function ,(car restart) :package ,(cdr restart)))))
-                   ;; Provide a sensible timestamp
                    ;; For SBCL and other platforms that die on dump-image, clean before the end:
-                   ,@(if (version<= "3.1.1" (asdf-version))
-                         `(:perform (image-op :before (o c)
+                   :perform (image-op :before (o c)
                              (setf *features* (remove :cl-launched *features*))
-                             (cleanup-temporary-files)))
-                         (when dump
-                           (error "Dumping an image with cl-launch 4 requires ASDF 3.1.1 or later")))))))
+                             (cleanup-temporary-files))))))
          (load-sys program-sys) ;; Give quicklisp a chance to download things
          (when dump
            (operate op program-sys)))
