@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper for Common Lisp -*- Lisp -*-
-CL_LAUNCH_VERSION='4.1.3.3'
+CL_LAUNCH_VERSION='4.1.4'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -196,7 +196,7 @@ Recent Linux kernels support a script interpreter itself being a script;
 BSD kernels don't and require a small C program cl-shim to be compiled and
 installed as /usr/bin/cl to use cl-launch this way.
 
-To work properly, \`cl-launch\` 4.1.3 depends on \`ASDF\` 3.1.2 or later, and
+To work properly, \`cl-launch\` 4.1.4 depends on \`ASDF\` 3.1.2 or later, and
 on its portability layer \`UIOP\`, to manage compilation and image life cycle.
 
 The software is specified as the evaluation of code in several phases;

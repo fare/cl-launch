@@ -1,13 +1,16 @@
 #| -*- Lisp -*-
-#!/usr/bin/cl -sm cl-launch/release
-exec "$(dirname $0)/cl-launch.sh" -X --system-main cl-launch/release -- "$0" "$@" ; exit
+#!/usr/bin/cl -Ds cl-launch/release
+exec "$(dirname $0)/cl-launch.sh" -X --dispatch-system cl-launch/release -- "$0" "$@" ; exit
 |#
 (defpackage :cl-launch/release
-  (:use :cl :uiop :asdf :inferior-shell :optima :optima.ppcre)
+  (:use :cl :uiop :asdf :fare-utils :optima :optima.ppcre
+        :inferior-shell :cl-scripting :cl-launch/dispatch)
+  (:import-from :cl-launch/dispatch #:main)
   ;; Note: these exports are also the list of available commands.
   (:export #:rep #:clean #:manpage
            #:source #:quickrelease
            #:get-date-from-git #:check-manual
+           #:debian-version #:script-version
            #:debian-package #:publish-debian-package #:debian-package-all))
 
 (in-package :cl-launch/release)
@@ -62,7 +65,7 @@ exec "$(dirname $0)/cl-launch.sh" -X --system-main cl-launch/release -- "$0" "$@
 (defun clean ()
   (with-current-directory ((pn))
     (run '(git clean -xfd)))
-  (values))
+  (success))
 
 (defun debian-package ()
   (let* ((debian-version (debian-version))
@@ -98,7 +101,8 @@ exec "$(dirname $0)/cl-launch.sh" -X --system-main cl-launch/release -- "$0" "$@
       (run `(pwd) :show t)
       (run/interactive `(gpg -b -a (cl-launch- ,version .tar.gz)) :show t)
       (run `(ln -sf (,cl-launch-version .tar.gz) cl-launch.tar.gz) :show t)
-      (run `(ln -sf (,cl-launch-version .tar.gz.asc) cl-launch.tar.gz.asc) :show t))))
+      (run `(ln -sf (,cl-launch-version .tar.gz.asc) cl-launch.tar.gz.asc) :show t)))
+  (success))
 
 (defun publish-debian-package ()
   (let* ((debian-version (debian-version))
@@ -107,11 +111,12 @@ exec "$(dirname $0)/cl-launch.sh" -X --system-main cl-launch/release -- "$0" "$@
     (with-current-directory (cldir)
       (run `(dput mentors (cl-launch_ ,debian-version _ ,(debian-arch) .changes)) :show t)
       (run `(rsync -av --delete ,cldir "common-lisp.net:/project/xcvb/public_html/cl-launch/") :show t)))
-  (values))
+  (success))
 
 (defun source ()
   (with-current-directory ((pn))
-    (run `(./cl-launch.sh --include ,(getcwd) "-B" install_path))))
+    (run `(./cl-launch.sh --include ,(getcwd) "-B" install_path)))
+  (success))
 
 (defparameter *months* #("January" "February" "March" "April" "May" "June"
                          "July" "August" "September" "October" "November" "December"))
@@ -136,7 +141,8 @@ exec "$(dirname $0)/cl-launch.sh" -X --system-main cl-launch/release -- "$0" "$@
         (date-from-git (subseq (get-date-from-git) 0 2)))
     (assert (equal date-from-manual date-from-git) ()
             "Manual says it's from ~{~D-~2,'0D~} but git commit is from ~{~D-~2,'0D~}"
-            date-from-manual date-from-git)))
+            date-from-manual date-from-git))
+  (success))
 
 (defun manpage ()
   ;;(check-manual-git-dates-match)
@@ -146,13 +152,15 @@ exec "$(dirname $0)/cl-launch.sh" -X --system-main cl-launch/release -- "$0" "$@
     (run `(ronn "--roff" "--manual=Shell Scripting with Common Lisp"
                 "--organization=Francois-Rene Rideau"
                 ,(format nil "--date=~{~D-~2,'0D-~2,'0D~}" (get-date-from-git))
-                cl-launch.1.md (> 2 /dev/null)))))
+                cl-launch.1.md (> 2 /dev/null))))
+  (success))
 
 (defun check-manual ()
   ;;(check-manual-git-dates-match)
   (manpage)
   (with-current-directory ((pn))
-    (run `(cmp ./cl-launch.1 ./debian/cl-launch.1))))
+    (run `(cmp ./cl-launch.1 ./debian/cl-launch.1)))
+  (success))
 
 (defun quickrelease ()
   (let* ((version (script-version)) ;; no need to compare with the debian version
@@ -171,7 +179,7 @@ exec "$(dirname $0)/cl-launch.sh" -X --system-main cl-launch/release -- "$0" "$@
                     "common-lisp.net:/project/xcvb/public_html/cl-launch/"))
       (run `(ssh common-lisp.net ln -sf ,tarball /project/xcvb/public_html/cl-launch/cl-launch.tar.gz))
       (run `(rm -f ,link ,tarball))))
-  (values))
+  (success))
 
 (defun debian-package-all ()
   (debian-package)
@@ -180,11 +188,4 @@ exec "$(dirname $0)/cl-launch.sh" -X --system-main cl-launch/release -- "$0" "$@
 (defun valid-commands ()
   (sort (while-collecting (c) (do-external-symbols (x :cl-launch/release) (c x))) #'string<))
 
-(defun main (argv)
-  (multiple-value-bind (command status)
-      (find-symbol (string-upcase (first argv)) :cl-launch/release)
-    (if (eq status :external)
-        (format t "~@[~{~S~^ ~}~%~]" (multiple-value-list (apply command (rest argv))))
-        (die 2 "~A ~:[requires a command~;doesn't recognize command ~:*~A~].~%Try one of: ~(~{~A~^ ~}~)~%"
-             (argv0) (first argv) (valid-commands))))
-  t) ;; success according to uiop:restore-image.
+(register-commands :cl-launch/release)

@@ -71,5 +71,9 @@ If NAME is NIL, return the value of *DEFAULT-BEHAVIOR*."
 (defun dispatch-entry (argv &optional (name (get-name)))
   (funcall (or (get-entry name) *default-behavior*) argv))
 
+;; The below function is NOT exported, but you can use :import-from so -Ds works trivially with some system of yours:
+(defun main (argv)
+  (dispatcher argv))
+
 (when (null *image-entry-point*)
   (setf *image-entry-point* #'dispatcher))
