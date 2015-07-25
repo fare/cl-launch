@@ -5,8 +5,10 @@ Homepage: http://www.cliki.net/cl-launch
 Maintainer: Francois-Rene Rideau <fare@tunes.org>
 Uploaders: Christoph Egger <christoph@debian.org>, Kan-Ru Chen <koster@debian.org>, Milan Zamazal <pdm@debian.org>, Peter Van Eynde <pvaneynd@debian.org>, Julien Danjou <acid@debian.org>
 Build-Depends: debhelper (>= 9)
+Build-Depends-Indep: dh-lisp
 Standards-Version: 3.9.6.1
 Vcs-Git: https://gitlab.common-lisp.net/xcvb/cl-launch.git
+Vcs-Browser: https://gitlab.common-lisp.net/xcvb/cl-launch
 
 Package: cl-launch
 Architecture: all

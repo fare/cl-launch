@@ -10,6 +10,9 @@ include_dir	:= $(clc-source)/$(pkg)
 doc-dir         := usr/share/doc/$(debpkg)
 
 
+%:
+	dh $@ --with lisp
+
 configure: configure-stamp
 configure-stamp:
 	dh_testdir
@@ -23,10 +26,13 @@ build-indep: build-stamp
 build-stamp: configure-stamp
 	dh_testdir
 	sh ./cl-launch.sh \
-		--include /${include_dir} \
+		--include "/${include_dir}" \
 		--lisp "sbcl ccl clisp abcl cmucl ecl mkcl allegro lispworks scl gcl xcl" \
 		--rc \
 		-B generate_install_files
+	# To generate the manpage from source, we could do this:
+	# sh ./cl-launch.sh -Ds cl-launch/release manpage
+	# But then we'd have to (1) package all the CL dependencies as .deb libraries (2) setup the source registry properly
 	touch build-stamp
 
 clean:

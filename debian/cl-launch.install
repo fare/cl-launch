@@ -1,0 +1,2 @@
+launcher.lisp wrapper.sh cl-launch.asd build.xcvb dispatch.lisp usr/share/common-lisp/source/cl-launch/
+cl-launch usr/bin

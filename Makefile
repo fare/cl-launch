@@ -14,7 +14,7 @@ all: source
 
 source:
 	@echo "Building Lisp source code for cl-launch in current directory"
-	@${CL_LAUNCH} --include ${PWD} -B install_path > /dev/null
+	@${CL_LAUNCH} --include "$${PWD}" -B install_path > /dev/null
 
 install: install_binary install_source install_system install_cl
 
@@ -22,26 +22,26 @@ install_binary: install_binary_standalone
 
 install_source:
 	@echo "Installing Lisp source code for cl-launch in ${INSTALL_SOURCE}"
-	@mkdir -p ${INSTALL_SOURCE}/
-	@${CL_LAUNCH} --include ${INSTALL_SOURCE} -B install_path > /dev/null
-	@if [ ! $${PWD} = ${INSTALL_SOURCE} ] ; then \
-		@cp dispatch.lisp ${INSTALL_SOURCE}/ ; \
+	@mkdir -p "${INSTALL_SOURCE}/"
+	@${CL_LAUNCH} --include "${INSTALL_SOURCE}" -B install_path > /dev/null
+	@if [ ! "$${PWD}" = "${INSTALL_SOURCE}" ] ; then \
+		@cp dispatch.lisp "${INSTALL_SOURCE}/" ; \
 	fi
 
 install_system: install_source
 	@echo "Linking .asd file for cl-launch into ${INSTALL_SYSTEMS}/"
-	@mkdir -p ${INSTALL_SYSTEMS}/
-	@if [ `dirname ${INSTALL_SYSTEMS}`/source/cl-launch = ${INSTALL_SOURCE} ] ; then \
-		ln -sf ../source/cl-launch/cl-launch.asd ${INSTALL_SYSTEMS}/ ; \
+	@mkdir -p "${INSTALL_SYSTEMS}/"
+	@if [ "`dirname '${INSTALL_SYSTEMS}'`/source/cl-launch" = "${INSTALL_SOURCE}" ] ; then \
+		ln -sf ../source/cl-launch/cl-launch.asd "${INSTALL_SYSTEMS}/" ; \
 	else \
-		ln -sf ${INSTALL_SOURCE}/cl-launch.asd ${INSTALL_SYSTEMS}/ ; \
+		ln -sf "${INSTALL_SOURCE}/cl-launch.asd" "${INSTALL_SYSTEMS}/" ; \
 	fi
 
 install_binary_standalone:
 	@echo "Installing a standalone binary of cl-launch in ${INSTALL_BIN}/"
 	@sh ./cl-launch.sh --no-include --no-rc \
 		--lisp '$(LISPS)' \
-		--output ${INSTALL_BIN}/cl-launch -B install_bin > /dev/null
+		--output '${INSTALL_BIN}/cl-launch' -B install_bin > /dev/null
 
 install-with-include: install_binary_with_include install_source install_system
 
@@ -79,9 +79,9 @@ reinstall:
 # This might fit your system, installing from same directory
 reinstall_here:
 	-git clean -xfd
-	make install_source install_binary_standalone INSTALL_SOURCE=$$PWD INSTALL_BIN=$$PWD
+	make install_source install_binary_standalone INSTALL_SOURCE="$${PWD}" INSTALL_BIN="$${PWD}"
 
-test:
+tests:
 	./cl-launch.sh -l "${LISPS}" -B tests
 
 WRONGFUL_TAGS := RELEASE upstream
