@@ -25,7 +25,7 @@ install_source:
 	@mkdir -p "${INSTALL_SOURCE}/"
 	@${CL_LAUNCH} --include "${INSTALL_SOURCE}" -B install_path > /dev/null
 	@if [ ! "$${PWD}" = "${INSTALL_SOURCE}" ] ; then \
-		@cp dispatch.lisp "${INSTALL_SOURCE}/" ; \
+		cp dispatch.lisp "${INSTALL_SOURCE}/" ; \
 	fi
 
 install_system: install_source
@@ -57,7 +57,7 @@ cl-shim: cl-shim.c
 
 ifeq ($(shell uname), Linux)
 install_cl: install_binary
-	ln -s cl-launch ${INSTALL_BIN}/cl
+	ln -sf cl-launch ${INSTALL_BIN}/cl
 else
 install_cl: cl-shim
 	cp -p cl-shim ${INSTALL_BIN}/cl
