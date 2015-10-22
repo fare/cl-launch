@@ -1,6 +1,6 @@
 #!/bin/sh
 #| cl-launch.sh -- shell wrapper for Common Lisp -*- Lisp -*-
-CL_LAUNCH_VERSION='4.1.4'
+CL_LAUNCH_VERSION='4.1.4.1'
 license_information () {
 AUTHOR_NOTE="\
 # Please send your improvements to the author:
@@ -2293,7 +2293,7 @@ NIL
   ;; only if ASDF 3 is in a predictable place under the user's homedir, thus
   ;; ~/common-lisp/asdf/ or ~/.local/share/common-lisp/source/asdf/ only.
   (block nil
-    (let ((required-asdf-version  "3.1.2")
+    (let ((required-asdf-version "3.1.2")
           (verbose *load-verbose*))
       (labels ((asdf-symbol (name)
                  (and (find-package :asdf) (find-symbol (string name) :asdf)))
@@ -2655,15 +2655,16 @@ Returns two values: the fasl path, and T if the file was (re)compiled"
                 (make-temporary-system
                  "program" dependencies
                  `(:serial t
-                   :build-operation ,op
-                   :build-pathname ,(when dump (ensure-absolute-pathname dump #'getcwd))
                    :entry-point ,(when restart
                                    `(lambda ()
                                       (funcall (ensure-function ,(car restart) :package ,(cdr restart)))))
                    ;; For SBCL and other platforms that die on dump-image, clean before the end:
                    :perform (image-op :before (o c)
                              (setf *features* (remove :cl-launched *features*))
-                             (cleanup-temporary-files))))))
+                             (cleanup-temporary-files))
+                   ,@(when dump
+                       `(:output-files
+                         (,op (o c) (values (list ,(ensure-absolute-pathname dump #'getcwd)) t))))))))
          (load-sys program-sys) ;; Give quicklisp a chance to download things
          (when dump
            (operate op program-sys)))
