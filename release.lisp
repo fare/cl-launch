@@ -2,7 +2,7 @@
 #!/usr/bin/cl -Ds cl-launch/release
 exec "$(dirname $0)/cl-launch.sh" -X --dispatch-system cl-launch/release -- "$0" "$@" ; exit
 |#
-(defpackage :cl-launch/release
+(uiop:define-package :cl-launch/release
   (:use :cl :uiop :asdf :fare-utils :optima :optima.ppcre
         :inferior-shell :cl-scripting :cl-launch/dispatch)
   (:import-from :cl-launch/dispatch #:main)
@@ -21,8 +21,9 @@ exec "$(dirname $0)/cl-launch.sh" -X --dispatch-system cl-launch/release -- "$0"
              (unless (version-satisfies system version)
                (die 2 "~A requires ~A at least ~A but only got version ~A"
                     (argv0) name version (component-version system))))))
-    (check-system-version "asdf" "3.1.2") ;; for package-inferred-system, uiop:argv0
-    (check-system-version "inferior-shell" "2.0.3"))) ;; for default run outputs, on-error error.
+    (when (asdf:find-system "inferior-shell" nil) ;; if not, we're built by bazel or some such!
+      (check-system-version "asdf" "3.1.2") ;; for package-inferred-system, uiop:argv0
+      (check-system-version "inferior-shell" "2.0.3")))) ;; for default run outputs, on-error error.
 
 (defvar *cl-launch-directory* ;; interactive users may want to override that.
   (truenamize

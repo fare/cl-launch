@@ -75,5 +75,8 @@ If NAME is NIL, return the value of *DEFAULT-BEHAVIOR*."
 (defun main (argv)
   (dispatcher argv))
 
+(defun entry-point ()
+  (main *command-line-arguments*))
+
 (when (null *image-entry-point*)
-  (setf *image-entry-point* #'dispatcher))
+  (setf *image-entry-point* #'entry-point))
