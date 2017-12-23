@@ -1,5 +1,8 @@
 TODO for cl-launch as of 4.1.4
 
+* Maybe add support for some Guile-like "meta switch" ?
+  https://www.gnu.org/software/guile/manual/html_node/The-Meta-Switch.html#The-Meta-Switch
+
 * When resuming from an image then dumping another, the INCLUDE_PATH
    becomes a very bad variable to look for the image.
    Include a test case and fix it.
