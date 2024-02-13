@@ -195,6 +195,9 @@ script authors can reasonably expect a script to work when it starts with:
 Recent Linux kernels support a script interpreter itself being a script;
 BSD kernels don't and require a small C program cl-shim to be compiled and
 installed as /usr/bin/cl to use cl-launch this way.
+You can also use the following more portable interpreter line, but it might
+not support specifying options to cl-launch:
+\`#!/usr/bin/env /usr/bin/cl-launch\`
 
 To work properly, \`cl-launch\` 4.1.4 depends on \`ASDF\` 3.1.2 or later, and
 on its portability layer \`UIOP\`, to manage compilation and image life cycle.
